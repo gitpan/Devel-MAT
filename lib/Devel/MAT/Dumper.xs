@@ -24,10 +24,18 @@ enum PMAT_SVt {
   PMAT_SVtSTASH,
   PMAT_SVtCODE,
   PMAT_SVtIO,
+  PMAT_SVtLVALUE,
   PMAT_SVtREGEXP,
   PMAT_SVtFORMAT,
 
   PMAT_SVtMAGIC = 0x80,
+};
+
+enum PMAT_CODEx {
+  PMAT_CODEx_CONSTSV = 1,
+  PMAT_CODEx_CONSTIX,
+  PMAT_CODEx_GVSV,
+  PMAT_CODEx_GVIX,
 };
 
 static void write_u8(FILE *fh, uint8_t v)
@@ -72,6 +80,44 @@ static void write_strn(FILE *fh, const char *s, size_t len)
 static void write_str(FILE *fh, const char *s)
 {
   write_strn(fh, s, strlen(s));
+}
+
+static void dump_optree(FILE *fh, const CV *cv, OP *o);
+static void dump_optree(FILE *fh, const CV *cv, OP *o)
+{
+  switch(o->op_type) {
+    case OP_CONST:
+    case OP_METHOD_NAMED:
+#ifdef USE_ITHREADS
+      if(o->op_targ) {
+        write_u8(fh, PMAT_CODEx_CONSTIX);
+        write_uint(fh, o->op_targ);
+      }
+#else
+      write_u8(fh, PMAT_CODEx_CONSTSV);
+      write_ptr(fh, cSVOPx(o)->op_sv);
+#endif
+      break;
+
+    case OP_AELEMFAST:
+    case OP_GVSV:
+    case OP_GV:
+#ifdef USE_ITHREADS
+      write_u8(fh, PMAT_CODEx_GVIX);
+      write_uint(fh, o->op_targ);
+#else
+      write_u8(fh, PMAT_CODEx_GVSV);
+      write_ptr(fh, cSVOPx(o)->op_sv);
+#endif
+      break;
+  }
+
+  if(o->op_flags & OPf_KIDS) {
+    OP *kid;
+    for (kid = ((UNOP*)o)->op_first; kid; kid = kid->op_sibling) {
+      dump_optree(fh, cv, kid);
+    }
+  }
 }
 
 static void write_private_gv(FILE *fh, const GV *gv)
@@ -162,6 +208,10 @@ static void write_private_cv(FILE *fh, const CV *cv)
     write_ptr(fh, (SV *)CvXSUBANY(cv).any_ptr);
   else
     write_ptr(fh, NULL);
+
+  if(!CvISXSUB(cv) && !CvCONST(cv) && CvROOT(cv))
+    dump_optree(fh, cv, CvROOT(cv));
+  write_u8(fh, 0);
 }
 
 static void write_private_io(FILE *fh, const IO *io)
@@ -169,6 +219,14 @@ static void write_private_io(FILE *fh, const IO *io)
   write_ptr(fh, IoTOP_GV(io));
   write_ptr(fh, IoFMT_GV(io));
   write_ptr(fh, IoBOTTOM_GV(io));
+}
+
+static void write_private_lv(FILE *fh, const SV *sv)
+{
+  write_u8(fh, LvTYPE(sv));
+  write_uint(fh, LvTARGOFF(sv));
+  write_uint(fh, LvTARGLEN(sv));
+  write_ptr(fh, LvTARG(sv));
 }
 
 static void write_sv(FILE *fh, const SV *sv)
@@ -184,6 +242,7 @@ static void write_sv(FILE *fh, const SV *sv)
       type = PMAT_SVtSCALAR; break;
     case SVt_REGEXP: type = PMAT_SVtREGEXP; break;
     case SVt_PVGV: type = PMAT_SVtGLOB; break;
+    case SVt_PVLV: type = PMAT_SVtLVALUE; break;
     case SVt_PVAV: type = PMAT_SVtARRAY; break;
     // HVs with names we call STASHes
     case SVt_PVHV: type = HvNAME(sv) ? PMAT_SVtSTASH : PMAT_SVtHASH; break;
@@ -208,6 +267,7 @@ static void write_sv(FILE *fh, const SV *sv)
     case PMAT_SVtSTASH:  write_private_stash(fh, (HV*)sv); break;
     case PMAT_SVtCODE:   write_private_cv   (fh, (CV*)sv); break;
     case PMAT_SVtIO:     write_private_io   (fh, (IO*)sv); break;
+    case PMAT_SVtLVALUE: write_private_lv   (fh,      sv); break;
 
     case PMAT_SVtREGEXP:
     case PMAT_SVtFORMAT:

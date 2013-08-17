@@ -11,6 +11,7 @@ use Gtk2::SimpleList;
 use Devel::MAT::Dumpfile;
 
 use List::Util qw( pairs );
+use List::UtilsBy qw( sort_by );
 
 my $win = Gtk2::Window->new( "toplevel" );
 $win->signal_connect( destroy => sub { Gtk2->main_quit } );
@@ -99,12 +100,15 @@ Gtk2->main;
 
 sub table_add
 {
-   my ( $label, $widget ) = @_;
+   my ( $label, $widget, $yoptions ) = @_;
+
+   my $xoptions = [ "expand", "fill" ];
+   $yoptions  //= [ "fill" ];
 
    my ( $next_row ) = $table->get_size;
 
-   $table->attach_defaults( Gtk2::Label->new( $label ), 0, 1, $next_row, $next_row + 1 );
-   $table->attach_defaults( $widget,                    1, 2, $next_row, $next_row + 1 );
+   $table->attach( Gtk2::Label->new( $label ), 0, 1, $next_row, $next_row + 1, $xoptions, $yoptions, 0, 3 );
+   $table->attach( $widget,                    1, 2, $next_row, $next_row + 1, $xoptions, $yoptions, 0, 3 );
 }
 
 sub display_sv
@@ -147,7 +151,7 @@ sub display_sv
       "Addr" => "text",
       "Desc" => "text",
    );
-   foreach ( pairs $sv->outrefs ) {
+   foreach ( sort_by { $_->[0] } pairs $sv->outrefs ) {
       my ( $name, $ref ) = @$_;
       push @{ $outrefs->{data} }, [ $name, sprintf( "%#x", $ref->addr ), $ref->desc ];
    }
@@ -159,14 +163,14 @@ sub display_sv
       my $sv = $df->sv_at( $addr );
       display_sv( $sv );
    });
-   table_add( "Outrefs" => vscrollable( $outrefs ) );
+   table_add( "Outrefs" => vscrollable( $outrefs ), [ "expand", "fill" ] );
 
    my $inrefs = Gtk2::SimpleList->new(
       "Ref"  => "text",
       "Addr" => "text",
       "Desc" => "text",
    );
-   foreach ( pairs $sv->inrefs ) {
+   foreach ( sort_by { $_->[0] } pairs $sv->inrefs ) {
       my ( $name, $ref ) = @$_;
       if( $ref ) {
          push @{ $inrefs->{data} }, [ $name, sprintf( "%#x", $ref->addr ), $ref->desc ];
@@ -183,7 +187,7 @@ sub display_sv
       my $sv = $df->sv_at( $addr );
       display_sv( $sv ) if $sv;
    });
-   table_add( "Inrefs" => vscrollable( $inrefs ) );
+   table_add( "Inrefs" => vscrollable( $inrefs ), [ "expand", "fill" ] );
 
    $table->show_all;
 

@@ -106,12 +106,23 @@ An SV:
     PTR     GLOB
     STR     FILE
     PTR     SCOPE
-    PTR     CONST
+    PTR     CONSTVAL
+    {U8     TYPE
+     ...         }    until TYPE==0
+
+     type: CONSTSV
+       PTR  SV
 
   type: IO
     PTR     TOP
     PTR     FORMAT
     PTR     BOTTOM
+
+  type: LVALUE
+    U8      TYPE
+    UINT    OFF
+    UINT    LEN
+    PTR     TARG
 
   type: REGEXP
 

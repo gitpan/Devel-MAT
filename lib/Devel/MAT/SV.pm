@@ -7,8 +7,10 @@ package Devel::MAT::SV;
 
 use strict;
 use warnings;
+use feature qw( switch );
+no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -198,15 +200,20 @@ sub inrefs
    return @{ $self->{inrefs_at} } if !wantarray;
 
    my $df = $self->{df};
-   return map {
+   my %seen;
+   my @inrefs;
+   foreach ( @{ $self->{inrefs_at} } ) {
+      next if $seen{$_}++;
+
       if( m/^\d+$/ ) {
          my $sv = $df->sv_at( $_ );
-         pairmap { $b == $self ? ( $a => $sv ) : () } $sv->outrefs;
+         push @inrefs, pairmap { $b == $self ? ( $a => $sv ) : () } $sv->outrefs;
       }
       else {
-         $_ => undef;
+         push @inrefs, $_ => undef;
       }
-   } @{ $self->{inrefs_at} };
+   }
+   return @inrefs;
 }
 
 =head1 IMMORTAL SVs
@@ -247,6 +254,10 @@ package Devel::MAT::SV::Unknown;
 use base qw( Devel::MAT::SV );
 __PACKAGE__->register_type( 0xff );
 sub _load {}
+
+sub desc { "UNKNOWN" }
+
+sub _outrefs {}
 
 package Devel::MAT::SV::GLOB;
 use base qw( Devel::MAT::SV );
@@ -638,18 +649,35 @@ sub _load
    my $self = shift;
    my ( $df ) = @_;
 
-   $self->{stash_at}   = $df->_read_ptr;
-   $self->{glob_at}    = $df->_read_ptr;
-   $self->{file}       = $df->_read_str;
-   $self->{scope_at}   = $df->_read_ptr;
-   $self->{padlist_at} = $df->_read_ptr;
-   $self->{const_at}   = $df->_read_ptr;
+   $self->{stash_at}    = $df->_read_ptr;
+   $self->{glob_at}     = $df->_read_ptr;
+   $self->{file}        = $df->_read_str;
+   $self->{scope_at}    = $df->_read_ptr;
+   $self->{padlist_at}  = $df->_read_ptr;
+   $self->{constval_at} = $df->_read_ptr;
+
+   $self->{consts_at} = \my @consts;
+   $self->{constix}   = \my @constix;
+   $self->{gvs_at} = \my @gvs;
+   $self->{gvix}   = \my @gvix;
+
+   while( my $type = $df->_read_u8 ) {
+      given( $type ) {
+         when( 1 ) { push @consts, $df->_read_ptr }
+         when( 2 ) { push @constix, $df->_read_uint }
+         when( 3 ) { push @gvs, $df->_read_ptr }
+         when( 4 ) { push @gvix, $df->_read_uint }
+         default   { die "TODO: unhandled CODEx type $type"; }
+      }
+   }
 }
 
 sub _fixup
 {
    my $self = shift;
    return unless $self->{padlist_at};
+
+   my $df = $self->{df};
 
    my $padlist = $self->padlist;
    $padlist->is_padlist(1);
@@ -666,6 +694,23 @@ sub _fixup
       $pad = [ map { $_->is_padlist(1) if $_; $_ } $pad->elems ];
    }
    $self->{pads} = \@pads;
+
+   # Under ithreads, constants are actually stored in the first padlist
+   if( $df->ithreads ) {
+      my $pad0 = $pads[0];
+
+      my %constix = map { $_ => 1 } @{ $self->{constix} };
+      my %gvix    = map { $_ => 1 } @{ $self->{gvix} };
+
+      @{$self->{consts_at}} = map { $pad0->[$_] ? $pad0->[$_]->addr : undef } @{ $self->{constix} };
+      @{$self->{gvs_at}}    = map { $pad0->[$_] ? $pad0->[$_]->addr : undef } @{ $self->{gvix} };
+
+      # Clear the obviously unused elements of lexnames and padlists
+      foreach my $ix ( @{ delete $self->{constix} }, @{ delete $self->{gvix} } ) {
+         undef $self->{lexnames}[$ix];
+         undef $_->[$ix] for @pads;
+      }
+   }
 }
 
 =head2 $stash = $cv->stash
@@ -678,19 +723,49 @@ sub _fixup
 
 =head2 $av = $cv->padlist
 
-=head2 $sv = $cv->const
+=head2 $sv = $cv->constval
 
 Returns the stash, glob, filename, scope, padlist or constant value of the
 code.
 
 =cut
 
-sub stash   { my $self = shift; return $self->{df}->sv_at( $self->{stash_at} ) }
-sub glob    { my $self = shift; return $self->{df}->sv_at( $self->{glob_at} ) }
-sub file    { my $self = shift; return $self->{file} }
-sub scope   { my $self = shift; return $self->{df}->sv_at( $self->{scope_at} ) }
-sub padlist { my $self = shift; return $self->{df}->sv_at( $self->{padlist_at} ) }
-sub const   { my $self = shift; return $self->{df}->sv_at( $self->{const_at} ) }
+sub stash    { my $self = shift; return $self->{df}->sv_at( $self->{stash_at} ) }
+sub glob     { my $self = shift; return $self->{df}->sv_at( $self->{glob_at} ) }
+sub file     { my $self = shift; return $self->{file} }
+sub scope    { my $self = shift; return $self->{df}->sv_at( $self->{scope_at} ) }
+sub padlist  { my $self = shift; return $self->{df}->sv_at( $self->{padlist_at} ) }
+sub constval { my $self = shift; return $self->{df}->sv_at( $self->{constval_at} ) }
+
+=head2 @svs = $cv->constants
+
+Returns a list of the SVs used as constants or method names in the code. On
+ithreads perl the constants are part of the padlist structure so this list is
+constructed from parts of the padlist at loading time.
+
+=cut
+
+sub constants
+{
+   my $self = shift;
+   my $df = $self->{df};
+   return map { $df->sv_at($_) } @{ $self->{consts_at} };
+}
+
+=head2 @svs = $cv->globrefs
+
+Returns a list of the SVs used as GLOB references in the code. On ithreads
+perl the constants are part of the padlist structure so this list is
+constructed from parts of the padlist at loading time.
+
+=cut
+
+sub globrefs
+{
+   my $self = shift;
+   my $df = $self->{df};
+   return map { $df->sv_at($_) } @{ $self->{gvs_at} };
+}
 
 sub stashname { my $self = shift; return $self->stash ? $self->stash->stashname : undef }
 
@@ -722,7 +797,7 @@ sub lexvars
       my $name = "<unknown>";
       for( my $scope = $self; $scope; $scope = $scope->scope ) {
          my $namepv = $scope->{lexnames}->[$i];
-         $name = $namepv->pv, last if $namepv->isa( "Devel::MAT::SV::SCALAR" );
+         $name = $namepv->pv, last if $namepv and $namepv->isa( "Devel::MAT::SV::SCALAR" );
       }
 
       push @ret, [ $name, $pad->[$i] ];
@@ -752,7 +827,9 @@ sub _outrefs
       ( $lexnames ?
          map { +"a lexical variable name" => $_ } $lexnames->elems :
          () ),
-      "the constant value" => $self->const,
+      "the constant value" => $self->constval,
+      ( map { +"a constant" => $_ } $self->constants ),
+      ( map { +"a referenced glob" => $_ } $self->globrefs ),
       ( map {
             my $pad = $_;
             map {
@@ -765,7 +842,7 @@ sub _outrefs
          } @$pads ),
       ( map { $direct_or_rv->( "an argument" => $_ ) }
          map { my $args = $_->[0];
-              $args->isa( "Devel::MX::SV::ARRAY" ) ? $args->elems : ()
+              $args && $args->isa( "Devel::MX::SV::ARRAY" ) ? $args->elems : ()
             } @$pads ),
    );
 }
@@ -800,9 +877,39 @@ sub _outrefs
    );
 }
 
-package Devel::MAT::SV::REGEXP;
+package Devel::MAT::SV::LVALUE;
 use base qw( Devel::MAT::SV );
 __PACKAGE__->register_type( 8 );
+
+sub _load
+{
+   my $self = shift;
+   my ( $df ) = @_;
+
+   $self->{type} = chr $df->_read_u8;
+   $self->{off}  = $df->_read_uint;
+   $self->{len}  = $df->_read_uint;
+   $self->{targ_at} = $df->_read_ptr;
+}
+
+sub type   { my $self = shift; return $self->{type} }
+sub off    { my $self = shift; return $self->{off} }
+sub len    { my $self = shift; return $self->{len} }
+sub target { my $self = shift; return $self->{df}->sv_at( $self->{targ_at} ) }
+
+sub desc { "LVALUE()" }
+
+sub _outrefs
+{
+   my $self = shift;
+   return (
+      "the target" => $self->target,
+   );
+}
+
+package Devel::MAT::SV::REGEXP;
+use base qw( Devel::MAT::SV );
+__PACKAGE__->register_type( 9 );
 
 sub _load {}
 
@@ -812,7 +919,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::FORMAT;
 use base qw( Devel::MAT::SV );
-__PACKAGE__->register_type( 9 );
+__PACKAGE__->register_type( 10 );
 
 sub _load {}
 

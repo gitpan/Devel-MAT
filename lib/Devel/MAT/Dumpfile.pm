@@ -8,9 +8,11 @@ package Devel::MAT::Dumpfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 use Carp;
+use IO::Handle;   # ->read
+use IO::Seekable; # ->tell
 
 use Devel::MAT::SV;
 
@@ -123,7 +125,7 @@ sub load
 
    my $flags = $self->_read_u8;
 
-   my $endian = ( $flags & 0x01 ) ? ">" : "<";
+   my $endian = ( $self->{big_endian} = $flags & 0x01 ) ? ">" : "<";
 
    my $u32_fmt = $self->{u32_fmt} = "L$endian";
    my $u64_fmt = $self->{u64_fmt} = "Q$endian";
@@ -229,6 +231,8 @@ sub _fixup
          $count++;
 
          next unless $sv->desc eq "REF()";
+         next if $sv->inrefs;
+
          delete $heap->{$addr};
       }
    }
@@ -327,6 +331,71 @@ sub perlversion
    my $self = shift;
    my $v = $self->{perlver};
    return join ".", $v>>24, ($v>>16) & 0xff, $v&0xffff;
+}
+
+=head2 $endian = $df->endian
+
+Returns the endian direction of the perl that the heap dump was created by, as
+either C<big> or C<little>.
+
+=cut
+
+sub endian
+{
+   my $self = shift;
+   return $self->{big_endian} ? "big" : "little";
+}
+
+=head2 $len = $df->uint_len
+
+Returns the length in bytes of a uint field of the perl that the heap dump was
+created by.
+
+=cut
+
+sub uint_len
+{
+   my $self = shift;
+   return $self->{uint_len};
+}
+
+=head2 $len = $df->ptr_len
+
+Returns the length in bytes of a pointer field of the perl that the heap dump
+was created by.
+
+=cut
+
+sub ptr_len
+{
+   my $self = shift;
+   return $self->{ptr_len};
+}
+
+=head2 $len = $df->nv_len
+
+Returns the length in bytes of a double field of the perl that the heap dump
+was created by.
+
+=cut
+
+sub nv_len
+{
+   my $self = shift;
+   return $self->{nv_len};
+}
+
+=head2 $ithreads = $df->ithreads
+
+Returns a boolean indicating whether ithread support was enabled in the perl
+that the heap dump was created by.
+
+=cut
+
+sub ithreads
+{
+   my $self = shift;
+   return $self->{ithreads};
 }
 
 =head2 %roots = $df->roots

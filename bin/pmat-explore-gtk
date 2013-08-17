@@ -1,0 +1,235 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use feature qw( switch );
+
+use Glib qw( TRUE FALSE );
+use Gtk2 -init;
+use Gtk2::SimpleList;
+
+use Devel::MAT::Dumpfile;
+
+use List::Util qw( pairs );
+
+my $win = Gtk2::Window->new( "toplevel" );
+$win->signal_connect( destroy => sub { Gtk2->main_quit } );
+$win->resize( 1000, 600 );
+my $winbox = Gtk2::VBox->new;
+$win->add( $winbox );
+
+my $menu = Gtk2::MenuBar->new;
+$winbox->pack_start( $menu, FALSE, TRUE, 0 );
+
+my $filemenu = add_submenu( $menu, "File" );
+add_menuitem( $filemenu, "Quit" => sub { Gtk2->main_quit } );
+
+my $gotomenu = add_submenu( $menu, "Goto" );
+
+my $pane = Gtk2::HPaned->new;
+$winbox->add( $pane );
+
+my $statusbar = Gtk2::Statusbar->new;
+$winbox->pack_end( $statusbar, FALSE, TRUE, 0 );
+
+$win->show_all;
+
+{
+   my $id;
+   sub progress
+   {
+      $statusbar->pop( $id ) if $id;
+      $id = $statusbar->push( $statusbar->get_context_id("progress"), "Progress: $_[0]" );
+      Gtk2->main_iteration_do( FALSE ) while Gtk2->events_pending;
+   }
+}
+
+my $df = Devel::MAT::Dumpfile->load(
+   $ARGV[0] // die( "Need dumpfile\n" ),
+   progress => \&progress,
+);
+
+foreach ( pairs $df->roots ) {
+   my ( $desc, $sv ) = @$_;
+   add_menuitem( $gotomenu, $desc, sub { display_sv( $sv ) } ) if $sv;
+}
+
+my $svlist = Gtk2::SimpleList->new(
+   "Address"     => "text",
+   "Description" => "text",
+   "Blessed"     => "text",
+   "Outrefs"     => "int",
+   "Inrefs"      => "int",
+);
+$svlist->get_column( $_ )->set_sort_column_id( $_ ) for 0 .. 4;
+
+$pane->add1( vscrollable( $svlist ) );
+
+my $total = scalar $df->heap;
+my $count = 0;
+foreach my $sv ( $df->heap ) {
+   push @{ $svlist->{data} }, [
+      sprintf( "%#x", $sv->addr ),
+      $sv->desc,
+      ( $sv->blessed ? $sv->blessed->stashname : "" ),
+      scalar $sv->outrefs,
+      scalar $sv->inrefs,
+   ];
+   $count++;
+   progress( sprintf "Loading GTK TreeView %d of %d (%.2f%%)",
+      $count, $total, $count*100 / $total ) if ($count % 1000) == 0;
+}
+
+my $table = Gtk2::Table->new( 1, 2 );
+$pane->add2( $table );
+
+$svlist->signal_connect( row_activated => sub {
+   my( $self, $path, $column ) = @_;
+   my $data = $self->get_row_data_from_path( $path );
+
+   my $addr = hex $data->[0];
+   my $sv = $df->sv_at( $addr );
+   display_sv( $sv );
+});
+
+progress( "Done" );
+
+$win->show_all;
+Gtk2->main;
+
+sub table_add
+{
+   my ( $label, $widget ) = @_;
+
+   my ( $next_row ) = $table->get_size;
+
+   $table->attach_defaults( Gtk2::Label->new( $label ), 0, 1, $next_row, $next_row + 1 );
+   $table->attach_defaults( $widget,                    1, 2, $next_row, $next_row + 1 );
+}
+
+sub display_sv
+{
+   my ( $sv ) = @_;
+
+   $table->remove( $_ ) foreach $table->get_children;
+
+   # Common things for all widget types;
+   table_add( "Address" => Gtk2::Label->new( sprintf "%#x", $sv->addr ) );
+
+   my $type = ref($sv) =~ s/^Devel::MAT::SV:://r;
+   table_add( "Type" => Gtk2::Label->new( $type ) );
+
+   table_add( "Description" => Gtk2::Label->new( $sv->desc ) );
+
+   if( my $stash = $sv->blessed ) {
+      table_add( "Blessed", Gtk2::Label->new( $stash->stashname ) );
+   }
+
+   given( $type ) {
+      when([ "GLOB", "CODE", "STASH" ]) {
+         table_add( "Stashname", Gtk2::Label->new( $sv->stashname ) ) if defined $sv->stashname;
+      }
+      when( "SCALAR" ) {
+         table_add( "UV", Gtk2::Label->new( $sv->uv ) ) if defined $sv->uv;
+         table_add( "NV", Gtk2::Label->new( $sv->nv ) ) if defined $sv->nv;
+         table_add( "PV", Gtk2::Label->new( $sv->pv ) ) if defined $sv->pv;
+      }
+   }
+
+   given( $type ) {
+      when([ "SCALAR", "ARRAY", "HASH", "STASH", "CODE" ]) {
+         table_add( "Name", Gtk2::Label->new( $sv->name ) ) if defined $sv->name;
+      }
+   }
+
+   my $outrefs = Gtk2::SimpleList->new(
+      "Ref"  => "text",
+      "Addr" => "text",
+      "Desc" => "text",
+   );
+   foreach ( pairs $sv->outrefs ) {
+      my ( $name, $ref ) = @$_;
+      push @{ $outrefs->{data} }, [ $name, sprintf( "%#x", $ref->addr ), $ref->desc ];
+   }
+   $outrefs->signal_connect( row_activated => sub {
+      my( $self, $path, $column ) = @_;
+      my $data = $self->get_row_data_from_path( $path );
+
+      my $addr = hex $data->[1];
+      my $sv = $df->sv_at( $addr );
+      display_sv( $sv );
+   });
+   table_add( "Outrefs" => vscrollable( $outrefs ) );
+
+   my $inrefs = Gtk2::SimpleList->new(
+      "Ref"  => "text",
+      "Addr" => "text",
+      "Desc" => "text",
+   );
+   foreach ( pairs $sv->inrefs ) {
+      my ( $name, $ref ) = @$_;
+      if( $ref ) {
+         push @{ $inrefs->{data} }, [ $name, sprintf( "%#x", $ref->addr ), $ref->desc ];
+      }
+      else {
+         push @{ $inrefs->{data} }, [ $name, "-", "ROOT" ];
+      }
+   }
+   $inrefs->signal_connect( row_activated => sub {
+      my( $self, $path, $column ) = @_;
+      my $data = $self->get_row_data_from_path( $path );
+
+      my $addr = hex $data->[1];
+      my $sv = $df->sv_at( $addr );
+      display_sv( $sv ) if $sv;
+   });
+   table_add( "Inrefs" => vscrollable( $inrefs ) );
+
+   $table->show_all;
+
+   my $model = $svlist->get_model;
+   for( my $iter = $model->get_iter_first; $iter; $iter = $model->iter_next($iter) ) {
+      my $addr = $model->get_value( $iter, 0 );
+
+      if( $sv->addr == hex $addr ) {
+         my $path = $model->get_path( $iter );
+         $svlist->scroll_to_cell( $path, $svlist->get_column( 0 ), '' );
+         $svlist->get_selection->select_path( $path );
+         last;
+      }
+   }
+}
+
+sub vscrollable
+{
+   my ( $widget ) = @_;
+
+   my $win = Gtk2::ScrolledWindow->new;
+   $win->set_policy( 'never', 'always' );
+   $win->add( $widget );
+
+   return $win;
+}
+
+sub add_submenu
+{
+   my ( $menu, $name ) = @_;
+
+   my $mi = Gtk2::MenuItem->new( $name );
+   my $submenu = Gtk2::Menu->new;
+   $mi->set_submenu( $submenu );
+
+   $menu->append( $mi );
+
+   return $submenu;
+}
+
+sub add_menuitem
+{
+   my ( $menu, $name, $code ) = @_;
+
+   my $mi = Gtk2::MenuItem->new( $name );
+   $mi->signal_connect( activate => $code );
+
+   $menu->append( $mi );
+}

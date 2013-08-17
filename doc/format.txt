@@ -1,0 +1,118 @@
+File consists sections:
+  Header
+  Roots
+  Stack
+  Heap
+
+
+Header:
+  CHAR[4] MAGIC     "PMAT"
+  U8      FLAGS     0x01 : big-endian
+                    0x02 : INT/UV/IV are 64-bit
+                    0x04 : PTR is 64-bit
+                    0x08 : NV is long double
+                    0x10 : ithreads
+  U8      zero
+  U16BE   FORMATVER 0
+  U32     PERLVER   rev<<24 | ver<<16 | sub
+
+Roots:
+  PTR     UNDEF         the "undef" immortal
+  PTR     YES           the "yes" immortal
+  PTR     NO            the "no" immortal
+  PTR     MAINCV        the main code
+  PTR     DEFSTASH      the default stash
+  PTR     MAINSTACK     the main stack AV
+  PTR     BEGINAV       the BEGIN list
+  PTR     CHECKAV       the CHECK list
+  PTR     UNITCHECKAV   the UNITCHECK list
+  PTR     INITAV        the INIT list
+  PTR     ENDAV         the END list
+  PTR     STRTAB        the shared string table HV
+  PTR     ENVGV         the ENV GV
+  PTR     INCGV         the INC GV
+  PTR     STATGV        the stat GV
+  PTR     STATNAME      the statname SV
+  PTR     TMPSV         the temporary SV
+  PTR     DEFGV         the default GV
+  PTR     ARGVGV        the ARGV GV
+  PTR     ARGOUTGV      the argvout GV
+  PTR     ARGVOUT_STACK the argout stack AV
+  PTR     FDPIDAV       the FD-to-PID mapping AV
+  PTR     PREAMBLEAV    the compiler preamble AV
+  PTR     MODGLOBALHV   the module data globals HV
+  PTR     REGEX_PADAV   the REGEXP pad AV
+  PTR     SORTSTASH     the sort stash
+  PTR     FIRSTGV       the *a GV
+  PTR     SECONDGV      the *b GV
+  PTR     DEBSTASH      the debugger stash
+  PTR     STASHCACHE    the stash cache
+  PTR     ISAREV        the reverse map of @ISA dependencies
+  PTR     MROS          the registered MROs HV
+
+Stack:
+  UINT    SIZE = $n
+  {PTR    ELEM}*$n
+
+Heap:
+  type==0-terminated list of SVs
+
+
+An SV:
+  U8      TYPE       (0xff == UNKNOWN)
+  PTR     ADDRESS
+  U32     REFCNT
+  PTR     BLESSED
+
+  type: SCALAR:
+    U8      FLAGS  0x01 : has IV
+                   0x02 : IV is UV
+                   0x04 : has NV
+                   0x08 : has STR
+                   0x10 : has RV
+    UINT?   IV
+    double? NV
+    STR?    PV
+    PTR     RV
+
+  type: GLOB
+    STR     NAME
+    PTR     STASH
+    PTR     SCALAR
+    PTR     ARRAY
+    PTR     HASH
+    PTR     CODE
+    PTR     EGV
+    PTR     IO
+    PTR     FORM
+
+  type: ARRAY
+    UINT    COUNT = $n
+    {PTR    ELEM}*$n
+
+  type: HASH
+    UINT    COUNT = $n
+    {STR    KEY
+     PTR    VALUE}*$n
+
+  type: STASH
+    STR     NAME
+    PTR     BACKREFS
+    PTR     MRO_ISA
+    [then fields as hash]
+
+  type: CODE
+    PTR     STASH
+    PTR     GLOB
+    STR     FILE
+    PTR     SCOPE
+    PTR     CONST
+
+  type: IO
+    PTR     TOP
+    PTR     FORMAT
+    PTR     BOTTOM
+
+  type: REGEXP
+
+  type: FORMAT

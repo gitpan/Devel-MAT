@@ -1,0 +1,102 @@
+{
+   "abstract" : "write a heap dump file for later analysis",
+   "author" : [
+      "Paul Evans <leonerd@leonerd.org.uk>"
+   ],
+   "dynamic_config" : 1,
+   "generated_by" : "Module::Build version 0.4005, CPAN::Meta::Converter version 2.120921",
+   "license" : [
+      "perl_5"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "Devel-MAT",
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "ExtUtils::CBuilder" : "0",
+            "List::Util" : "1.29",
+            "Test::More" : "0.88"
+         }
+      }
+   },
+   "provides" : {
+      "Devel::MAT::Dumper" : {
+         "file" : "lib/Devel/MAT/Dumper.pm",
+         "version" : "0.01"
+      },
+      "Devel::MAT::Dumpfile" : {
+         "file" : "lib/Devel/MAT/Dumpfile.pm",
+         "version" : "0.01"
+      },
+      "Devel::MAT::SV" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.01"
+      },
+      "Devel::MAT::SV::ARRAY" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::CODE" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::FORMAT" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::GLOB" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::HASH" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::IO" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::Immortal" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::NO" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::REGEXP" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::SCALAR" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::STASH" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::UNDEF" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::Unknown" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      },
+      "Devel::MAT::SV::YES" : {
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : 0
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "license" : [
+         "http://dev.perl.org/licenses/"
+      ]
+   },
+   "version" : "0.01"
+}

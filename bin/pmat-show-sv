@@ -1,0 +1,78 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use feature qw( say switch );
+
+use Devel::MAT::Dumpfile;
+
+sub show_sv
+{
+   my $sv = shift;
+
+   say $sv->desc_addr . " with refcount " . $sv->refcnt;
+   say "  blessed as " . $sv->blessed->stashname if $sv->blessed;
+
+   my $type = ref $sv; $type =~ s/^Devel::MAT::SV:://;
+   given( $type ) {
+      when( "GLOB" ) {
+         say '  stash=' . $sv->stash->desc_addr if $sv->stash;
+
+         say '  SCALAR=' . $sv->scalar->desc_addr if $sv->scalar;
+         say '  ARRAY='  . $sv->array->desc_addr  if $sv->array;
+         say '  HASH='   . $sv->hash->desc_addr   if $sv->hash;
+         say '  CODE='   . $sv->code->desc_addr   if $sv->code;
+         say '  EGV='    . $sv->egv->desc_addr    if $sv->egv;
+         say '  IO='     . $sv->io->desc_addr     if $sv->io;
+         say '  FORM='   . $sv->form->desc_addr   if $sv->form;
+      }
+      when( "SCALAR" ) {
+         say '  UV=' . $sv->uv if defined $sv->uv;
+         say '  NV=' . $sv->nv if defined $sv->nv;
+         if( defined( my $pv = $sv->pv ) ) {
+            say '  PV=' . $pv if length $pv < 40 and $pv !~ m/[\0-\x1f\x80-\x9f]/;
+            say '  PV{' . length($pv) . '}';
+         }
+         say '  RV=' . $sv->rv->desc_addr if $sv->rv;
+      }
+      when( "ARRAY" ) {
+         my @elems = $sv->elems;
+         say "  [$_]=" . $elems[$_]->desc_addr for 0 .. $#elems;
+      }
+      when([ "HASH", "STASH" ]) {
+         if( $type eq "STASH" ) {
+            say '  stashname=' . $sv->stashname;
+         }
+         foreach my $key ( sort $sv->keys ) {
+            my $v = $sv->value($key);
+            say $v ?  "  {$key}=" . $v->desc_addr : "  {$key} undef";
+         }
+      }
+      when( "CODE" ) {
+         say $sv->stash ? "  stash=" . $sv->stash->desc_addr : "  no stash";
+         say $sv->glob  ? "  glob="  . $sv->glob->desc_addr  : "  no glob";
+         say "  file=" . $sv->file;
+         say $sv->scope ? "  scope=" . $sv->scope->desc_addr : "  no scope";
+
+         my $depth = $sv->depth;
+         foreach my $depth ( 0 .. $depth-1 ) {
+            say "Lexvars at depth $depth";
+            foreach ( $sv->lexvars( $depth ) ) {
+               my ( $name, $sv ) = @$_;
+               say $sv ? "  $name=" . $sv->desc_addr : "  $name undef";
+            }
+         }
+      }
+   }
+}
+
+my $df = Devel::MAT::Dumpfile->load( $ARGV[0] // die "Need dumpfile\n" );
+
+my $addr = $ARGV[1] // die "Need addr\n";
+$addr = $df->defstash->addr if $addr eq "defstash";
+$addr = hex $addr if $addr =~ m/^0x/;
+
+my $sv = $df->sv_at( $addr );
+$sv or die sprintf "No SV at %#x\n", $addr;
+
+show_sv( $sv );

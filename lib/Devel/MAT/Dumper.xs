@@ -36,6 +36,8 @@ enum PMAT_CODEx {
   PMAT_CODEx_CONSTIX,
   PMAT_CODEx_GVSV,
   PMAT_CODEx_GVIX,
+  PMAT_CODEx_PADNAME,
+  PMAT_CODEx_PADSV,
 };
 
 static void write_u8(FILE *fh, uint8_t v)
@@ -58,12 +60,18 @@ static void write_u64(FILE *fh, uint64_t v)
 
 static void write_uint(FILE *fh, UV v)
 {
+#if UVSIZE == 8
   write_u64(fh, v);
+#elif UVSIZE == 4
+  write_u32(fh, v);
+#else
+# error "Expected UVSIZE to be either 4 or 8"
+#endif
 }
 
 static void write_ptr(FILE *fh, const void *ptr)
 {
-  write_u64(fh, (uint64_t)ptr);
+  fwrite(&ptr, sizeof ptr, 1, fh);
 }
 
 static void write_double(FILE *fh, double v)
@@ -196,6 +204,8 @@ static void write_private_stash(FILE *fh, const HV *stash)
 
 static void write_private_cv(FILE *fh, const CV *cv)
 {
+  PADLIST *padlist;
+
   write_ptr(fh, CvSTASH(cv));
   write_ptr(fh, CvGV(cv));
   if(CvFILE(cv))
@@ -203,7 +213,7 @@ static void write_private_cv(FILE *fh, const CV *cv)
   else
     write_str(fh, "");
   write_ptr(fh, CvOUTSIDE(cv));
-  write_ptr(fh, CvPADLIST(cv));
+  write_ptr(fh, padlist = CvPADLIST(cv));
   if(CvCONST(cv))
     write_ptr(fh, (SV *)CvXSUBANY(cv).any_ptr);
   else
@@ -211,6 +221,36 @@ static void write_private_cv(FILE *fh, const CV *cv)
 
   if(!CvISXSUB(cv) && !CvCONST(cv) && CvROOT(cv))
     dump_optree(fh, cv, CvROOT(cv));
+
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 18)
+  if(padlist) {
+    PADNAME **names = PadlistNAMESARRAY(padlist);
+    PAD **pads = PadlistARRAY(padlist);
+    int depth, i;
+
+    for(i = 0; i <= PadlistNAMESMAX(padlist); i++) {
+      write_u8(fh, PMAT_CODEx_PADNAME);
+      write_uint(fh, i);
+      if(PadnamePV(names[i]))
+        write_str(fh, PadnamePV(names[i]));
+      else
+        write_uint(fh, -1);
+    }
+
+    for(depth = 1; depth <= PadlistMAX(padlist); depth++) {
+      PAD *pad = pads[depth];
+      SV **svs = PadARRAY(pad);
+
+      for(i = 1; i <= PadMAX(pad); i++) {
+        write_u8(fh, PMAT_CODEx_PADSV);
+        write_uint(fh, depth);
+        write_uint(fh, i);
+        write_ptr(fh, svs[i]);
+      }
+    }
+  }
+#endif
+
   write_u8(fh, 0);
 }
 

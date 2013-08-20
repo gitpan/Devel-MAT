@@ -13,7 +13,7 @@ my $ADDR = qr/0x[0-9a-f]+/;
 my $DUMPFILE = "test.pmat";
 
 Devel::MAT::Dumper::dumpfile( $DUMPFILE );
-#END { unlink $DUMPFILE; }
+END { unlink $DUMPFILE; }
 
 my $df = Devel::MAT::Dumpfile->load( $DUMPFILE );
 
@@ -67,11 +67,7 @@ sub PACKAGE_CODE { my $lexvar = "An unlikely scalar value"; }
 
    is( $cv->name, '&main::PACKAGE_CODE', 'PACKAGE_CODE CV has a name' );
 
-   # depth == 0 doesn't really exist but we just want the names
-   my @lexvars = $cv->lexvars( 0 );
-
-   cmp_ok( scalar @lexvars, ">=", 1, 'PACKAGE_CODE CV has atleast 1 lexvar' );
-   is( $lexvars[0]->[0], '$lexvar', 'lexvar name' );
+   is( $cv->padname( 1 ), '$lexvar', 'PACKAGE_CODE CV has padname(1)' );
 
    is( ( $cv->constants )[0]->pv, "An unlikely scalar value", 'CV constants' );
 }

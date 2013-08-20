@@ -113,6 +113,24 @@ An SV:
      type: CONSTSV
        PTR  SV
 
+     type: CONSTIX
+       UINT PADIX
+
+     type: GVSV
+       PTR  SV
+
+     type: GVIX
+       UINT PADIX
+
+     type: PADNAME  == Only seen on 5.18+
+       UINT PADIX
+       STR  NAME
+
+     type: PADSV    == Only seen on 5.18+
+       UINT DEPTH
+       UINT PADIX
+       PTR  SV
+
   type: IO
     PTR     TOP
     PTR     FORMAT

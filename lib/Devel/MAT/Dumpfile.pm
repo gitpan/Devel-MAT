@@ -8,7 +8,7 @@ package Devel::MAT::Dumpfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 use Carp;
 use IO::Handle;   # ->read
@@ -143,6 +143,8 @@ sub load
 
    $flags &= ~0x1f;
    die sprintf "Cannot read %s - unrecognised flags %x\n", $path, $flags if $flags;
+
+   $self->{minus_1} = unpack $self->{uint_fmt}, pack $self->{uint_fmt}, -1;
 
    $self->_read_u8 == 0 or die "Cannot read $path - 'zero' header field is not zero";
 
@@ -290,6 +292,7 @@ sub _read_str
 {
    my $self = shift;
    my $len = $self->_read_uint;
+   return undef if $len == $self->{minus_1};
    return $self->_read($len);
 }
 

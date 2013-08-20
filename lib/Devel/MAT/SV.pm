@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -638,6 +638,8 @@ package Devel::MAT::SV::CODE;
 use base qw( Devel::MAT::SV );
 __PACKAGE__->register_type( 6 );
 
+use List::Util qw( pairmap );
+
 =head1 Devel::MAT::SV::CODE
 
 Represents a function or closure; an SV of type C<SVt_PVCV>.
@@ -660,6 +662,8 @@ sub _load
    $self->{constix}   = \my @constix;
    $self->{gvs_at} = \my @gvs;
    $self->{gvix}   = \my @gvix;
+   $self->{padnames} = \my @padnames;
+   $self->{padsvs_at} = \my @padsvs_at; # [depth][idx]
 
    while( my $type = $df->_read_u8 ) {
       given( $type ) {
@@ -667,6 +671,11 @@ sub _load
          when( 2 ) { push @constix, $df->_read_uint }
          when( 3 ) { push @gvs, $df->_read_ptr }
          when( 4 ) { push @gvix, $df->_read_uint }
+         when( 5 ) { my $idx = $df->_read_uint;
+                     $padnames[$idx] = $df->_read_str }
+         when( 6 ) { my $depth = $df->_read_uint;
+                     my $idx = $df->_read_uint;
+                     $padsvs_at[$depth][$idx] = $df->_read_ptr; }
          default   { die "TODO: unhandled CODEx type $type"; }
       }
    }
@@ -679,6 +688,11 @@ sub _fixup
 
    my $df = $self->{df};
 
+   # 5.18.0 onwards has a totally different padlist arrangement
+   if( $df->{perlver} >= ( ( 5 << 24 ) | ( 18 << 16 ) ) ) {
+      return;
+   }
+
    my $padlist = $self->padlist;
    $padlist->is_padlist(1);
 
@@ -688,12 +702,15 @@ sub _fixup
    # The rest stores the actual pads
    my ( $lexnames, @pads ) = $padlist->elems;
 
-   $self->{lexnames} = [ map { $_->is_padlist(1); $_ } $lexnames->elems ];
+   $_->is_padlist(1) for $lexnames->elems;
+   $self->{lexnames_av} = $lexnames;
 
-   foreach my $pad ( @pads ) {
-      $pad = [ map { $_->is_padlist(1) if $_; $_ } $pad->elems ];
+   $self->{padsvs_at} = \my @padsvs_at;
+   foreach my $i ( 0 .. $#pads ) {
+      my $pad = $pads[$i];
+      $_ and $_->is_padlist(1) for $pad->elems;
+      $padsvs_at[$i+1] = [ map { $_ ? $_->addr : undef } $pad->elems ];
    }
-   $self->{pads} = \@pads;
 
    # Under ithreads, constants are actually stored in the first padlist
    if( $df->ithreads ) {
@@ -702,15 +719,17 @@ sub _fixup
       my %constix = map { $_ => 1 } @{ $self->{constix} };
       my %gvix    = map { $_ => 1 } @{ $self->{gvix} };
 
-      @{$self->{consts_at}} = map { $pad0->[$_] ? $pad0->[$_]->addr : undef } @{ $self->{constix} };
-      @{$self->{gvs_at}}    = map { $pad0->[$_] ? $pad0->[$_]->addr : undef } @{ $self->{gvix} };
+      @{$self->{consts_at}} = map { my $e = $pad0->elem($_); $e ? $e->addr : undef } @{ $self->{constix} };
+      @{$self->{gvs_at}}    = map { my $e = $pad0->elem($_); $e ? $e->addr : undef } @{ $self->{gvix} };
 
       # Clear the obviously unused elements of lexnames and padlists
       foreach my $ix ( @{ delete $self->{constix} }, @{ delete $self->{gvix} } ) {
-         undef $self->{lexnames}[$ix];
-         undef $_->[$ix] for @pads;
+         undef $self->{lexnames_av}->{elems_at}[$ix];
+         undef $_->{elems_at}[$ix] for @pads;
       }
    }
+
+   @{$self->{padnames}} = map { $_ and $_->isa( "Devel::MAT::SV::SCALAR" ) ? $_->pv : undef } $lexnames->elems;
 }
 
 =head2 $stash = $cv->stash
@@ -776,12 +795,73 @@ sub name
    return '&' . $self->{df}->sv_at( $self->{glob_at} )->stashname;
 }
 
-sub lexnames { my $self = shift; return $self->padlist ? $self->padlist->elem(0) : undef }
-
 sub depth
 {
    my $self = shift;
-   return scalar @{ $self->{pads} };
+   return scalar @{ $self->{padsvs_at} };
+}
+
+=head2 $name = $cv->padname( $padix )
+
+Returns the name of the $padix'th lexical variable, or C<undef> if it doesn't
+have a name
+
+=cut
+
+sub padname
+{
+   my $self = shift;
+   my ( $padix ) = @_;
+
+   for( my $scope = $self; $scope; $scope = $scope->scope ) {
+      my $padnames = $scope->{padnames};
+      return $padnames->[$padix] if $padnames->[$padix];
+   }
+
+   return undef;
+}
+
+=head2 @names = $cv->padnames
+
+Returns a list of all the lexical variable names
+
+=cut
+
+sub padnames
+{
+   my $self = shift;
+   return map { $self->padname( $_ ) } 1 .. scalar $self->{lexnames_av}->elems;
+}
+
+=head2 $sv = $cv->padsv( $depth, $padix )
+
+Returns the SV at the $padix'th index of the $depth'th pad. $depth is
+1-indexed.
+
+=cut
+
+sub padsv
+{
+   my $self = shift;
+   my ( $depth, $padix ) = @_;
+
+   my $df = $self->{df};
+   return $df->sv_at( $self->{padsvs_at}[$depth][$padix] );
+}
+
+=head2 @svs = $cv->padsvs( $depth )
+
+Returns a list of all the SVs at the $depth'th pad. $depth is 1-indexed.
+
+=cut
+
+sub padsvs
+{
+   my $self = shift;
+   my ( $depth ) = @_;
+
+   my $df = $self->{df};
+   return map { $df->sv_at( $_ ) } @{ $self->{padsvs_at}[$depth] };
 }
 
 sub lexvars
@@ -789,20 +869,8 @@ sub lexvars
    my $self = shift;
    my ( $depth ) = @_;
 
-   my $names = $self->{lexnames};
-   my $pad = $self->{pads}[$depth];
-
-   my @ret;
-   foreach my $i ( 1 .. $#$pad ) {
-      my $name = "<unknown>";
-      for( my $scope = $self; $scope; $scope = $scope->scope ) {
-         my $namepv = $scope->{lexnames}->[$i];
-         $name = $namepv->pv, last if $namepv and $namepv->isa( "Devel::MAT::SV::SCALAR" );
-      }
-
-      push @ret, [ $name, $pad->[$i] ];
-   }
-   return @ret;
+   my @svs = $self->padsvs( $depth );
+   return map { $self->padname( $_ ) => $svs[$_] } 1 .. $#svs;
 }
 
 sub desc
@@ -815,35 +883,35 @@ sub desc
 sub _outrefs
 {
    my $self = shift;
-   my $lexnames = $self->lexnames;
-   my $pads     = $self->{pads};
+   my $pads = $self->{pads};
+
+   my $maxdepth = $pads ? $#{ $self->{padsvs_at} } : 0;
 
    return (
       "the scope" => $self->scope,
       "the stash" => $self->stash,
       "the glob"  => $self->glob,
       "the padlist" => $self->padlist,
-      "the lexnames" => $lexnames,
-      ( $lexnames ?
-         map { +"a lexical variable name" => $_ } $lexnames->elems :
+      "the lexnames" => $self->{lexnames_av},
+      ( $self->{lexnames_av} ?
+         map { +"a lexical variable name" => $_ } $self->{lexnames_av}->elems :
          () ),
       "the constant value" => $self->constval,
       ( map { +"a constant" => $_ } $self->constants ),
       ( map { +"a referenced glob" => $_ } $self->globrefs ),
       ( map {
-            my $pad = $_;
-            map {
-               my $sv = $pad->[$_];
-               my $lexname = $lexnames->elem( $_ );
-               my $name = ( ref $lexname eq "Devel::MAT::SV::SCALAR" and $lexname->pv ) ?
-                  "the lexical " . $lexname->pv : "a lexical";
-               $direct_or_rv->( $name => $sv )
-            } 1 .. $#$pad
-         } @$pads ),
-      ( map { $direct_or_rv->( "an argument" => $_ ) }
-         map { my $args = $_->[0];
-              $args && $args->isa( "Devel::MX::SV::ARRAY" ) ? $args->elems : ()
-            } @$pads ),
+            my $depth = $_;
+            +"pad at depth ${depth}" => $pads->[$depth-1],
+            pairmap {
+               my $name = $a ? "the lexical $a" : "a lexical";
+               $direct_or_rv->( $name => $b )
+            } $self->lexvars( $depth )
+         } 1 .. $maxdepth ),
+      ( map {
+            my $depth = $_;
+            my $args = $pads->[$depth-1]->elem( 0 );
+            $args ? map { $direct_or_rv->( "an argument at depth ${depth}" => $_ ) } $args->elems : ()
+         } 1 .. $maxdepth ),
    );
 }
 

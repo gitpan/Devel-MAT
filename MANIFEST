@@ -4,6 +4,7 @@ bin/pmat-explore-gtk
 bin/pmat-list-orphans
 bin/pmat-show-sv
 Build.PL
+Changes
 doc/format.txt
 lib/Devel/MAT/Dumper.pm
 lib/Devel/MAT/Dumper.xs

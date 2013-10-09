@@ -4,7 +4,7 @@ NAME
 SYNOPSIS
      use Devel::MAT::Dumper;
 
-     Devel::MAT::Dumper::dumpfile( "path/to/the/file.pmat" );
+     Devel::MAT::Dumper::dump( "path/to/the/file.pmat" );
 
 DESCRIPTION
     This module provides the memory-dumping function that creates a heap

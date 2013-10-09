@@ -8,7 +8,7 @@ package Devel::MAT::Dumpfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 use Carp;
 use IO::Handle;   # ->read
@@ -221,22 +221,6 @@ sub _fixup
    foreach my $addr ( @{ $self->{stack_at} } ) {
       my $sv = $self->sv_at( $addr ) or next;
       $sv->_push_inref_at( "a value on the stack" );
-   }
-
-   # Delete the now-elided RVs
-   if( $Devel::MAT::SV::ELIDE_RVS ) {
-      my @elided;
-      $count = 0;
-      while( my ( $addr, $sv ) = each %$heap ) {
-         $progress->( sprintf "Eliding RVs %d of %d (%.2f%%)",
-            $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 1000) == 0;
-         $count++;
-
-         next unless $sv->desc eq "REF()";
-         next if $sv->inrefs;
-
-         delete $heap->{$addr};
-      }
    }
 
    return $self;
@@ -500,15 +484,15 @@ sub identify
    my ( $sv, $seen ) = @_;
    my $svaddr = $sv->addr;
 
-   return ( "undef" )             if $svaddr == $self->{undef_at};
-   return ( "true" )              if $svaddr == $self->{yes_at};
-   return ( "false" )             if $svaddr == $self->{no_at};
+   return ( "undef" ) if $svaddr == $self->{undef_at};
+   return ( "true" )  if $svaddr == $self->{yes_at};
+   return ( "false" ) if $svaddr == $self->{no_at};
 
    foreach my $root ( @ROOTS ) {
       return $ROOTDESC{$root} if $svaddr == $self->{"${root}_at"};
    }
 
-   $seen ||= {};
+   $seen ||= { $sv->addr => 1 };
 
    my @ret = ();
    my %inrefs = $sv->inrefs;

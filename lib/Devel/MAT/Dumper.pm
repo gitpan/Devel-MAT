@@ -8,7 +8,7 @@ package Devel::MAT::Dumper;
 use strict;
 use warnings;
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 require XSLoader;
 XSLoader::load( __PACKAGE__, $VERSION );
@@ -21,7 +21,7 @@ C<Devel::MAT::Dumper> - write a heap dump file for later analysis
 
  use Devel::MAT::Dumper;
 
- Devel::MAT::Dumper::dumpfile( "path/to/the/file.pmat" );
+ Devel::MAT::Dumper::dump( "path/to/the/file.pmat" );
 
 =head1 DESCRIPTION
 

@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -28,12 +28,12 @@ documented below.
 
 =cut
 
-our $ELIDE_RVS = 1;
 # Lexical sub, so all inline subclasses can see it
 my $direct_or_rv = sub {
    my ( $name, $sv ) = @_;
    if( defined $sv and $sv->desc eq "REF()" and !@{ $sv->{magic} } ) {
-      return ( "$name via RV" => $sv->rv );
+      return ( "$name directly" => $sv,
+               "$name via RV" => $sv->rv );
    }
    else {
       return ( "$name directly" => $sv );
@@ -207,7 +207,12 @@ sub inrefs
 
       if( m/^\d+$/ ) {
          my $sv = $df->sv_at( $_ );
-         push @inrefs, pairmap { $b == $self ? ( $a => $sv ) : () } $sv->outrefs;
+         if( $sv ) {
+            push @inrefs, pairmap { $b == $self ? ( $a => $sv ) : () } $sv->outrefs;
+         }
+         else {
+            warn "Unable to find SV at $_ for $self inref\n";
+         }
       }
       else {
          push @inrefs, $_ => undef;
@@ -690,46 +695,49 @@ sub _fixup
 
    # 5.18.0 onwards has a totally different padlist arrangement
    if( $df->{perlver} >= ( ( 5 << 24 ) | ( 18 << 16 ) ) ) {
-      return;
-   }
+      if( $df->ithreads ) {
+         my $pad0_at = $self->{padsvs_at}[1]; # Yes, 1
 
-   my $padlist = $self->padlist;
-   $padlist->is_padlist(1);
-
-   $_->is_padlist(1) for $padlist->elems;
-
-   # PADLIST[0] stores the names of the lexicals
-   # The rest stores the actual pads
-   my ( $lexnames, @pads ) = $padlist->elems;
-
-   $_->is_padlist(1) for $lexnames->elems;
-   $self->{lexnames_av} = $lexnames;
-
-   $self->{padsvs_at} = \my @padsvs_at;
-   foreach my $i ( 0 .. $#pads ) {
-      my $pad = $pads[$i];
-      $_ and $_->is_padlist(1) for $pad->elems;
-      $padsvs_at[$i+1] = [ map { $_ ? $_->addr : undef } $pad->elems ];
-   }
-
-   # Under ithreads, constants are actually stored in the first padlist
-   if( $df->ithreads ) {
-      my $pad0 = $pads[0];
-
-      my %constix = map { $_ => 1 } @{ $self->{constix} };
-      my %gvix    = map { $_ => 1 } @{ $self->{gvix} };
-
-      @{$self->{consts_at}} = map { my $e = $pad0->elem($_); $e ? $e->addr : undef } @{ $self->{constix} };
-      @{$self->{gvs_at}}    = map { my $e = $pad0->elem($_); $e ? $e->addr : undef } @{ $self->{gvix} };
-
-      # Clear the obviously unused elements of lexnames and padlists
-      foreach my $ix ( @{ delete $self->{constix} }, @{ delete $self->{gvix} } ) {
-         undef $self->{lexnames_av}->{elems_at}[$ix];
-         undef $_->{elems_at}[$ix] for @pads;
+         @{$self->{consts_at}} = map { $pad0_at->[$_] } @{ $self->{constix} };
+         @{$self->{gvs_at}}    = map { $pad0_at->[$_] } @{ $self->{gvix} };
       }
    }
+   else {
+      my $padlist = $self->padlist;
+      $padlist->is_padlist(1);
 
-   @{$self->{padnames}} = map { $_ and $_->isa( "Devel::MAT::SV::SCALAR" ) ? $_->pv : undef } $lexnames->elems;
+      $_->is_padlist(1) for $padlist->elems;
+
+      # PADLIST[0] stores the names of the lexicals
+      # The rest stores the actual pads
+      my ( $lexnames, @pads ) = $padlist->elems;
+
+      $_->is_padlist(1) for $lexnames->elems;
+      $self->{lexnames_av} = $lexnames;
+
+      $self->{padsvs_at} = \my @padsvs_at;
+      foreach my $i ( 0 .. $#pads ) {
+         my $pad = $pads[$i];
+         $_ and $_->is_padlist(1) for $pad->elems;
+         $padsvs_at[$i+1] = [ map { $_ ? $_->addr : undef } $pad->elems ];
+      }
+
+      # Under ithreads, constants are actually stored in the first padlist
+      if( $df->ithreads ) {
+         my $pad0 = $pads[0];
+
+         @{$self->{consts_at}} = map { my $e = $pad0->elem($_); $e ? $e->addr : undef } @{ $self->{constix} };
+         @{$self->{gvs_at}}    = map { my $e = $pad0->elem($_); $e ? $e->addr : undef } @{ $self->{gvix} };
+
+         # Clear the obviously unused elements of lexnames and padlists
+         foreach my $ix ( @{ delete $self->{constix} }, @{ delete $self->{gvix} } ) {
+            undef $self->{lexnames_av}->{elems_at}[$ix];
+            undef $_->{elems_at}[$ix] for @pads;
+         }
+      }
+
+      @{$self->{padnames}} = map { $_ and $_->isa( "Devel::MAT::SV::SCALAR" ) ? $_->pv : undef } $lexnames->elems;
+   }
 }
 
 =head2 $stash = $cv->stash

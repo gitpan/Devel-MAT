@@ -8,8 +8,11 @@ my $build = Module::Build->new(
    dist_version_from => 'lib/Devel/MAT/Dumper.pm',
 
    build_requires => {
-      'List::Util' => '1.29', # pair* functions
       'Test::More' => '0.88', # done_testing
+   },
+   requires => {
+      'List::Util' => '1.29', # pair* functions
+      'perl' => '5.012',      # SVt_REGEXP
    },
    auto_configure_requires => 0, # Don't add M::B to configure_requires
    license => 'perl',

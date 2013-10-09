@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 use feature qw( switch );
+no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 use Glib qw( TRUE FALSE );
 use Gtk2 -init;

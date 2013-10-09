@@ -315,7 +315,7 @@ static void write_sv(FILE *fh, const SV *sv)
       break;
   }
 
-  if(SvTYPE(sv) >= SVt_PVMG) {
+  if(SvMAGICAL(sv)) {
     MAGIC *mg;
     for(mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic) {
       if(mg->mg_flags & MGf_REFCOUNTED) {
@@ -453,7 +453,7 @@ static void dumpfh(FILE *fh)
   write_u8(fh, 0);
 }
 
-static void dumpfile(char *file)
+static void dump(char *file)
 {
   FILE *fh = fopen(file, "wb+");
   if(!fh)
@@ -466,4 +466,4 @@ static void dumpfile(char *file)
 MODULE = Devel::MAT::Dumper        PACKAGE = Devel::MAT::Dumper
 
 void
-dumpfile(char *file)
+dump(char *file)

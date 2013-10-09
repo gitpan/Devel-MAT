@@ -12,7 +12,7 @@ my $ADDR = qr/0x[0-9a-f]+/;
 
 my $DUMPFILE = "test.pmat";
 
-Devel::MAT::Dumper::dumpfile( $DUMPFILE );
+Devel::MAT::Dumper::dump( $DUMPFILE );
 END { unlink $DUMPFILE; }
 
 my $df = Devel::MAT::Dumpfile->load( $DUMPFILE );
@@ -69,7 +69,25 @@ sub PACKAGE_CODE { my $lexvar = "An unlikely scalar value"; }
 
    is( $cv->padname( 1 ), '$lexvar', 'PACKAGE_CODE CV has padname(1)' );
 
-   is( ( $cv->constants )[0]->pv, "An unlikely scalar value", 'CV constants' );
+   my @constants = $cv->constants;
+   ok( @constants, 'CV has constants' );
+   is( $constants[0]->pv, "An unlikely scalar value", 'CV constants' );
+}
+
+BEGIN { our @AofA = ( [] ); }
+{
+   my $av = $defstash->value( "AofA" )->array;
+
+   ok( my $rv = $av->elem(0), 'AofA AV has elem[0]' );
+   ok( my $av2 = $rv->rv, 'RV has rv' );
+
+   my %av_outrefs = $av->outrefs;
+   is( $av_outrefs{"element [0] directly"}, $rv, '$rv is element[0] directly of $av' );
+   is( $av_outrefs{"element [0] via RV"}, $av2, '$av2 is element [0] via RV of $av' );
+
+   my %av2_inrefs = $av2->inrefs;
+   is( $av2_inrefs{"the referrant"}, $rv, '$av2 is referred to as the referrant of $rv' );
+   is( $av2_inrefs{"element [0] via RV"}, $av, '$av2 is referred to as element[0] via RV of $av' );
 }
 
 BEGIN { our $LVREF = \substr our $TMPPV = "abc", 1, 2 }

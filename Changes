@@ -1,5 +1,17 @@
 Revision history for Devel-MAT
 
+0.04    2013/10/09 23:23:27
+        [CHANGES]
+         * Renamed dumpfile() to just dump()
+         * Don't delete elided RVs; include both direct and via-RV outrefs
+
+        [BUGFIXES]
+         * Start 'identify' with the initial SV already seen so it doesn't
+           infinitely recurse
+         * Remember to still fix up consts_at from constix on ithreaded 5.18
+         * Need to check if SVs are actually magical (SvMAGICAL), not just
+           potentially magical (>= SVt_PVMG)
+
 0.03    CHANGES:
          * Altered handling of PADLISTs for perl 5.18.0
          * Ensure that UINTs and PTRs are written in correct platform sizes

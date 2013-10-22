@@ -8,7 +8,7 @@ package Devel::MAT::Dumpfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 use Carp;
 use IO::Handle;   # ->read
@@ -499,6 +499,11 @@ sub identify
    foreach my $desc ( sort keys %inrefs ) {
       my $ref = $inrefs{$desc};
 
+      if( !defined $ref ) {
+         push @ret, $desc; # e.g. "a value on the stack"
+         next;
+      }
+
       my @me;
       if( $ref == $sv ) {
          @me = "itself";
@@ -519,6 +524,67 @@ sub identify
 
    return "not found" unless @ret;
    return @ret;
+}
+
+=head2 $sv = $df->find_symbol( $name )
+
+Attempts to walk the symbol table looking for a symbol of the given name,
+which must include the sigil.
+
+ $Package::Name::symbol_name => to return a SCALAR SV
+ @Package::Name::symbol_name => to return an ARRAY SV
+ %Package::Name::symbol_name => to return a HASH SV
+ &Package::Name::symbol_name => to return a CODE SV
+
+=cut
+
+sub find_symbol
+{
+   my $self = shift;
+   my ( $name ) = @_;
+
+   my ( $sigil, $globname ) = $name =~ m/^([\$\@%&])(.*)$/ or
+      croak "Could not parse sigil from $name";
+
+   my $glob = $self->find_glob( $globname );
+
+   my $slot = ( $sigil eq '$' ) ? "scalar" :
+              ( $sigil eq '@' ) ? "array"  :
+              ( $sigil eq '%' ) ? "hash"   :
+              ( $sigil eq '&' ) ? "code"   :
+                                  die "ARGH"; # won't happen
+
+   my $sv = $glob->$slot or
+      croak "\*$globname has no $slot slot";
+   return $sv;
+}
+
+=head2 $gv = $df->find_glob( $name )
+
+Attempts to walk to the symbol table looking for a symbol of the given name,
+returning the C<GLOB> object if found.
+
+=cut
+
+sub find_glob
+{
+   my $self = shift;
+   my ( $name ) = @_;
+
+   my ( $parent, $shortname ) = $name =~ m/^(?:(.*)::)?(.+?)$/;
+
+   my $stash;
+   if( length $parent ) {
+      my $parentgv = $self->find_glob( $parent . "::" );
+      $stash = $parentgv->stash or croak "$parent has no stash";
+   }
+   else {
+      $stash = $self->defstash;
+   }
+
+   my $gv = $stash->value( $shortname ) or
+      croak $stash->stashname . " has no symbol $shortname";
+   return $gv;
 }
 
 =head1 AUTHOR

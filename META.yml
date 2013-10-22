@@ -4,9 +4,10 @@ author:
   - 'Paul Evans <leonerd@leonerd.org.uk>'
 build_requires:
   ExtUtils::CBuilder: 0
+  Test::Identity: 0
   Test::More: 0.88
 dynamic_config: 1
-generated_by: 'Module::Build version 0.4007, CPAN::Meta::Converter version 2.132510'
+generated_by: 'Module::Build version 0.4007, CPAN::Meta::Converter version 2.132661'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -15,13 +16,13 @@ name: Devel-MAT
 provides:
   Devel::MAT::Dumper:
     file: lib/Devel/MAT/Dumper.pm
-    version: 0.04
+    version: 0.05
   Devel::MAT::Dumpfile:
     file: lib/Devel/MAT/Dumpfile.pm
-    version: 0.04
+    version: 0.05
   Devel::MAT::SV:
     file: lib/Devel/MAT/SV.pm
-    version: 0.04
+    version: 0.05
   Devel::MAT::SV::ARRAY:
     file: lib/Devel/MAT/SV.pm
   Devel::MAT::SV::CODE:
@@ -57,4 +58,4 @@ requires:
   perl: 5.012
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.04
+version: 0.05

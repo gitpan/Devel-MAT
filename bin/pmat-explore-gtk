@@ -14,10 +14,12 @@ use Devel::MAT::Dumpfile;
 use List::Util qw( pairs );
 use List::UtilsBy qw( sort_by );
 
+my $df;
+
 my $win = Gtk2::Window->new( "toplevel" );
 $win->signal_connect( destroy => sub { Gtk2->main_quit } );
 $win->resize( 1000, 600 );
-my $winbox = Gtk2::VBox->new;
+my $winbox = Gtk2::VBox->new( 0, 0 );
 $win->add( $winbox );
 
 my $menu = Gtk2::MenuBar->new;
@@ -25,6 +27,107 @@ $winbox->pack_start( $menu, FALSE, TRUE, 0 );
 
 my $filemenu = add_submenu( $menu, "File" );
 add_menuitem( $filemenu, "Quit" => sub { Gtk2->main_quit } );
+
+my $navmenu = add_submenu( $menu, "Navigate" );
+
+my $toolbar = Gtk2::Toolbar->new;
+$toolbar->set_style( 'both' );
+$winbox->pack_start( $toolbar, FALSE, TRUE, 0 );
+
+my $backbtn = $toolbar->append_item( "Back", "Go back to the previous SV", "",
+   Gtk2::Image->new_from_stock("gtk-go-back", "small-toolbar"), \&history_back );
+my $forwardbtn = $toolbar->append_item( "Forward", "Go forward to the next SV", "",
+   Gtk2::Image->new_from_stock("gtk-go-forward", "small-toolbar"), \&history_forward );
+
+### History management
+{
+   my @back_sv;
+   my @forward_sv;
+   my $current_sv;
+
+   $backbtn->set_sensitive( FALSE );
+   $forwardbtn->set_sensitive( FALSE );
+
+   sub history_back
+   {
+      return unless @back_sv;
+
+      unshift @forward_sv, $current_sv if $current_sv;
+      $current_sv = pop @back_sv;
+
+      $backbtn->set_sensitive( scalar @back_sv );
+      $forwardbtn->set_sensitive( scalar @forward_sv );
+
+      display_sv( $current_sv );
+   }
+
+   sub history_forward
+   {
+      return unless @forward_sv;
+
+      push @back_sv, $current_sv if $current_sv;
+      $current_sv = shift @forward_sv;
+
+      $backbtn->set_sensitive( scalar @back_sv );
+      $forwardbtn->set_sensitive( scalar @forward_sv );
+
+      display_sv( $current_sv );
+   }
+
+   sub history_nav
+   {
+      my ( $sv ) = @_;
+
+      push @back_sv, $current_sv if $current_sv;
+      $current_sv = $sv;
+
+      if( @forward_sv and $sv == $forward_sv[0] ) {
+         shift @forward_sv;
+      }
+      else {
+         @forward_sv = ();
+      }
+
+      $backbtn->set_sensitive( scalar @back_sv );
+      $forwardbtn->set_sensitive( scalar @forward_sv );
+
+      display_sv( $current_sv );
+   }
+}
+
+add_menuitem( $navmenu, "Back" => \&history_back );
+add_menuitem( $navmenu, "Forward" => \&history_forward );
+
+add_menuitem( $navmenu, "To SV..." => sub {
+   my $d = Gtk2::Dialog->new(
+      'Enter SV address',
+      $win,
+      [ qw( modal destroy-with-parent )],
+      'gtk-cancel' => 'reject',
+      'gtk-ok'     => 'accept',
+   );
+
+   my $entry = Gtk2::Entry->new();
+   $d->signal_connect(
+      response => sub {
+         my $win = shift;
+         my $ev = shift;
+         if( $ev eq 'accept' ) {
+            my $sv = $df->sv_at( hex $entry->get_text );
+            history_nav( $sv ) if $sv;
+            $win->destroy;
+         }
+         elsif( $ev eq 'reject' ) {
+            $win->destroy;
+         }
+      }
+   );
+
+   my $vbox = $d->vbox;
+   $vbox->pack_start($entry, 0, 0, 4);
+   $vbox->show_all;
+   $d->show;
+});
 
 my $gotomenu = add_submenu( $menu, "Goto" );
 
@@ -46,14 +149,14 @@ $win->show_all;
    }
 }
 
-my $df = Devel::MAT::Dumpfile->load(
+$df = Devel::MAT::Dumpfile->load(
    $ARGV[0] // die( "Need dumpfile\n" ),
    progress => \&progress,
 );
 
 foreach ( pairs $df->roots ) {
    my ( $desc, $sv ) = @$_;
-   add_menuitem( $gotomenu, $desc, sub { display_sv( $sv ) } ) if $sv;
+   add_menuitem( $gotomenu, $desc, sub { history_nav( $sv ) } ) if $sv;
 }
 
 my $svlist = Gtk2::SimpleList->new(
@@ -91,7 +194,7 @@ $svlist->signal_connect( row_activated => sub {
 
    my $addr = hex $data->[0];
    my $sv = $df->sv_at( $addr );
-   display_sv( $sv );
+   history_nav( $sv );
 });
 
 progress( "Done" );
@@ -121,6 +224,8 @@ sub display_sv
    # Common things for all widget types;
    table_add( "Address" => Gtk2::Label->new( sprintf "%#x", $sv->addr ) );
 
+   table_add( "SvREFCNT" => Gtk2::Label->new( $sv->refcnt ) );
+
    my $type = ref($sv) =~ s/^Devel::MAT::SV:://r;
    table_add( "Type" => Gtk2::Label->new( $type ) );
 
@@ -138,6 +243,8 @@ sub display_sv
          table_add( "UV", Gtk2::Label->new( $sv->uv ) ) if defined $sv->uv;
          table_add( "NV", Gtk2::Label->new( $sv->nv ) ) if defined $sv->nv;
          table_add( "PV", Gtk2::Label->new( $sv->pv ) ) if defined $sv->pv;
+         table_add( "RV", Gtk2::Label->new( $sv->rv->desc . ( $sv->is_weak ? " weakly" : " strongly" ) ) )
+            if defined $sv->rv;
       }
    }
 
@@ -162,7 +269,7 @@ sub display_sv
 
       my $addr = hex $data->[1];
       my $sv = $df->sv_at( $addr );
-      display_sv( $sv );
+      history_nav( $sv );
    });
    table_add( "Outrefs" => vscrollable( $outrefs ), [ "expand", "fill" ] );
 
@@ -186,7 +293,7 @@ sub display_sv
 
       my $addr = hex $data->[1];
       my $sv = $df->sv_at( $addr );
-      display_sv( $sv ) if $sv;
+      history_nav( $sv ) if $sv;
    });
    table_add( "Inrefs" => vscrollable( $inrefs ), [ "expand", "fill" ] );
 

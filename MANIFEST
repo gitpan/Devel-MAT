@@ -1,4 +1,4 @@
-bin/pmat-dump
+bin/pmat-count
 bin/pmat-dump-symbols
 bin/pmat-explore-gtk
 bin/pmat-list-orphans

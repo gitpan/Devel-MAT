@@ -38,6 +38,8 @@ enum PMAT_CODEx {
   PMAT_CODEx_GVIX,
   PMAT_CODEx_PADNAME,
   PMAT_CODEx_PADSV,
+  PMAT_CODEx_PADNAMES,
+  PMAT_CODEx_PAD,
 };
 
 static void write_u8(FILE *fh, uint8_t v)
@@ -147,7 +149,8 @@ static void write_private_sv(FILE *fh, const SV *sv)
                (SvUOK(sv) ? 0x02 : 0) |
                (SvNOK(sv) ? 0x04 : 0) |
                (SvPOK(sv) ? 0x08 : 0) |
-               (SvROK(sv) ? 0x10 : 0));
+               (SvROK(sv) ? 0x10 : 0) |
+               (SvWEAKREF(sv) ? 0x20 : 0));
   if(SvIOK(sv))
     write_uint(fh, SvUVX(sv));
   if(SvNOK(sv))
@@ -169,6 +172,11 @@ static void write_private_av(FILE *fh, const AV *av)
 
 static void write_private_hv(FILE *fh, const HV *hv)
 {
+  if(SvOOK(hv) && HvAUX(hv))
+    write_ptr(fh, HvAUX(hv)->xhv_backreferences);
+  else
+    write_ptr(fh, NULL);
+
   if(hv_iterinit((HV *)hv)) {
     HE *he;
     int nkeys = 0;
@@ -196,7 +204,6 @@ static void write_private_stash(FILE *fh, const HV *stash)
 
   write_str(fh, HvNAME(stash));
 
-  write_ptr(fh, HvAUX(stash)->xhv_backreferences);
   write_ptr(fh, mro_meta ? mro_meta->isa : NULL);
 
   write_private_hv(fh, stash);
@@ -228,6 +235,9 @@ static void write_private_cv(FILE *fh, const CV *cv)
     PAD **pads = PadlistARRAY(padlist);
     int depth, i;
 
+    write_u8(fh, PMAT_CODEx_PADNAMES);
+    write_ptr(fh, PadlistNAMES(padlist));
+
     for(i = 0; i <= PadlistNAMESMAX(padlist); i++) {
       write_u8(fh, PMAT_CODEx_PADNAME);
       write_uint(fh, i);
@@ -240,6 +250,10 @@ static void write_private_cv(FILE *fh, const CV *cv)
     for(depth = 1; depth <= PadlistMAX(padlist); depth++) {
       PAD *pad = pads[depth];
       SV **svs = PadARRAY(pad);
+
+      write_u8(fh, PMAT_CODEx_PAD);
+      write_uint(fh, depth);
+      write_ptr(fh, pad);
 
       for(i = 1; i <= PadMAX(pad); i++) {
         write_u8(fh, PMAT_CODEx_PADSV);

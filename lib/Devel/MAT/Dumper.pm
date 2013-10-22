@@ -8,7 +8,7 @@ package Devel::MAT::Dumper;
 use strict;
 use warnings;
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 require XSLoader;
 XSLoader::load( __PACKAGE__, $VERSION );
@@ -36,6 +36,63 @@ contains a snapshot of the process at that moment in time, which can later be
 loaded and analysed by various tools using C<Devel::MAT::Dumpfile>.
 
 =cut
+
+=head1 IMPORT OPTIONS
+
+The following C<import> options control the behaviour of the module. They may
+primarily be useful when used in the C<-M> perl option:
+
+=head2 -dump_at_END
+
+Installs an C<END> block which writes a dump file at C<END> time, just before
+the interpreter exits.
+
+ $ perl -MDevel::MAT::Dumper=-dump_at_END ...
+
+=head2 -dump_at_SIGQUIT
+
+Installs a handler for C<SIGQUIT> to write a dump file if the signal is
+received.
+
+ $ perl -MDevel::MAT::Dumper=-dump_at_SIGQUIT ...
+
+=head2 -file $PATH
+
+Sets the name of the file which is automatically dumped; defaults to
+F<$0.pmat> if not supplied.
+
+ $ perl -MDevel::MAT::Dumper=-file,foo.pmat ...
+
+=cut
+
+my $dumpfile_name = "$0.pmat";
+
+my $dump_at_END;
+END {
+   Devel::MAT::Dumper::dump( $dumpfile_name ) if $dump_at_END;
+}
+
+sub import
+{
+   my $pkg = shift;
+
+   while( @_ ) {
+      my $sym = shift;
+
+      if( $sym eq "-dump_at_END" ) {
+         $dump_at_END++;
+      }
+      elsif( $sym eq "-dump_at_SIGQUIT" ) {
+         $SIG{QUIT} = sub { Devel::MAT::Dumper::dump( $dumpfile_name ) };
+      }
+      elsif( $sym eq "-file" ) {
+         $dumpfile_name = shift;
+      }
+      else {
+         die "Unrecognised $pkg import symbol $sym\n";
+      }
+   }
+}
 
 =head1 AUTHOR
 

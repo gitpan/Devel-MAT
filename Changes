@@ -1,5 +1,17 @@
 Revision history for Devel-MAT
 
+0.05    2013/10/22 01:34:44
+        [CHANGES]
+         * Added ->find_symbol and ->find_glob
+         * Identify weakrefs in descriptions and in GTK explorer
+         * All hashes have the backrefs AV field, not just stashes
+         * Recognise import() options on D:M:Dumper
+         * Grab padnames and pad AVs on 5.18
+         * Added a toolbar with back/forward buttons in GTK explorer
+
+        [BUGFIXES]
+         * Don't crash when ->identify'ing SVs that are stack temporaries
+
 0.04    2013/10/09 23:23:27
         [CHANGES]
          * Renamed dumpfile() to just dump()

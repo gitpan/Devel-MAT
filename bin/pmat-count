@@ -1,0 +1,26 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Devel::MAT::Dumpfile;
+
+my $df = Devel::MAT::Dumpfile->load( $ARGV[0] // die "Need dumpfile\n" );
+
+print "Perl memory dumpfile from perl ", $df->perlversion, "\n";
+print "Heap contains ", scalar $df->heap, " objects\n";
+
+my %kinds;
+my %blessed_kinds;
+
+foreach my $sv ( $df->heap ) {
+   $kinds{ref $sv}++;
+   $blessed_kinds{ref $sv}++ if $sv->blessed;
+}
+
+printf "  %-20s %-10s %-10s\n", "Kind", "Count", "(blessed)";
+
+foreach my $class ( sort keys %kinds ) {
+   ( my $kind = $class ) =~ s/^Devel::MAT::SV:://;
+   printf "  %-20s %-10s %-10s\n", $kind, $kinds{$class}, $blessed_kinds{$class} // "";
+}

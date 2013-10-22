@@ -8,6 +8,7 @@ my $build = Module::Build->new(
    dist_version_from => 'lib/Devel/MAT/Dumper.pm',
 
    build_requires => {
+      'Test::Identity' => 0,
       'Test::More' => '0.88', # done_testing
    },
    requires => {

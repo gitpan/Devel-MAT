@@ -19,6 +19,28 @@ DESCRIPTION
     later be loaded and analysed by various tools using
     `Devel::MAT::Dumpfile'.
 
+IMPORT OPTIONS
+    The following `import' options control the behaviour of the module. They
+    may primarily be useful when used in the `-M' perl option:
+
+  -dump_at_END
+    Installs an `END' block which writes a dump file at `END' time, just
+    before the interpreter exits.
+
+     $ perl -MDevel::MAT::Dumper=-dump_at_END ...
+
+  -dump_at_SIGQUIT
+    Installs a handler for `SIGQUIT' to write a dump file if the signal is
+    received.
+
+     $ perl -MDevel::MAT::Dumper=-dump_at_SIGQUIT ...
+
+  -file $PATH
+    Sets the name of the file which is automatically dumped; defaults to
+    $0.pmat if not supplied.
+
+     $ perl -MDevel::MAT::Dumper=-file,foo.pmat ...
+
 AUTHOR
     Paul Evans <leonerd@leonerd.org.uk>
 

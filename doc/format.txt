@@ -70,6 +70,7 @@ An SV:
                    0x04 : has NV
                    0x08 : has STR
                    0x10 : has RV
+                   0x20 : RV is weak
     UINT?   IV
     double? NV
     STR?    PV
@@ -91,13 +92,13 @@ An SV:
     {PTR    ELEM}*$n
 
   type: HASH
+    PTR     BACKREFS
     UINT    COUNT = $n
     {STR    KEY
      PTR    VALUE}*$n
 
   type: STASH
     STR     NAME
-    PTR     BACKREFS
     PTR     MRO_ISA
     [then fields as hash]
 

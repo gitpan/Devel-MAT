@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.04';
+our $VERSION = '0.05';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -386,6 +386,12 @@ sub _load
    $self->{nv}    = $df->_read_nv   if $flags & 0x04;
    $self->{pv}    = $df->_read_str  if $flags & 0x08;
    $self->{rv_at} = $df->_read_ptr  if $flags & 0x10;
+
+   $self->{uv_is_iv}   = $flags & 0x02;
+   $self->{rv_is_weak} = $flags & 0x20;
+
+   $flags &= ~0x3f;
+   $flags and die sprintf "Unrecognised SCALAR flags %02x\n", $flags;
 }
 
 =head2 $uv = $sv->uv
@@ -411,6 +417,18 @@ sub nv { my $self = shift; return $self->{nv} }
 sub pv { my $self = shift; return $self->{pv} }
 sub rv { my $self = shift; return $self->{rv_at} ? $self->{df}->sv_at( $self->{rv_at} ) : undef }
 
+=head2 $weak = $sv->is_weak
+
+Returns true if the SV is a weakened RV reference.
+
+=cut
+
+sub is_weak
+{
+   my $self = shift;
+   return $self->{rv_is_weak};
+}
+
 sub name
 {
    my $self = shift;
@@ -422,7 +440,7 @@ sub desc
 {
    my $self = shift;
 
-   return "REF()" if $self->rv;
+   return sprintf "REF(%s)", $self->is_weak ? "W" : "" if $self->rv;
 
    my $flags = "";
    $flags .= "U" if defined $self->{uv};
@@ -520,6 +538,8 @@ sub _load
    my $self = shift;
    my ( $df ) = @_;
 
+   $self->{backrefs_at} = $df->_read_ptr;
+
    my $n = $df->_read_uint;
    foreach ( 1 .. $n ) {
       my $key = $df->_read_str;
@@ -582,9 +602,14 @@ sub desc
 sub _outrefs
 {
    my $self = shift;
-   return map {
-      $direct_or_rv->( "value {$_}" => $self->value( $_ ) )
-   } $self->keys;
+   my $df = $self->{df};
+
+   return (
+      "the backrefs list" => $df->sv_at( $self->{backrefs_at} ),
+      map {
+         $direct_or_rv->( "value {$_}" => $self->value( $_ ) )
+      } $self->keys
+   );
 }
 
 package Devel::MAT::SV::STASH;
@@ -604,7 +629,6 @@ sub _load
    my ( $df ) = @_;
 
    $self->{name} = $df->_read_str;
-   $self->{backrefs_at} = $df->_read_ptr;
    $self->{mro_isa_at} = $df->_read_ptr;
 
    $self->SUPER::_load( @_ );
@@ -635,7 +659,6 @@ sub _outrefs
    my $self = shift;
    my $df = $self->{df};
    return $self->SUPER::_outrefs,
-      "the backrefs list" => $df->sv_at( $self->{backrefs_at} ),
       "the mro ISA cache" => $df->sv_at( $self->{mro_isa_at} );
 }
 
@@ -681,6 +704,9 @@ sub _load
          when( 6 ) { my $depth = $df->_read_uint;
                      my $idx = $df->_read_uint;
                      $padsvs_at[$depth][$idx] = $df->_read_ptr; }
+         when( 7 ) { $self->{padnames_at} = $df->_read_ptr; }
+         when( 8 ) { my $depth = $df->_read_uint;
+                     $self->{pads_at}[$depth] = $df->_read_ptr; }
          default   { die "TODO: unhandled CODEx type $type"; }
       }
    }
@@ -695,6 +721,16 @@ sub _fixup
 
    # 5.18.0 onwards has a totally different padlist arrangement
    if( $df->{perlver} >= ( ( 5 << 24 ) | ( 18 << 16 ) ) ) {
+      if( my $av = $self->{padnames_av} = $df->sv_at( $self->{padnames_at} ) ) {
+         $av->is_padlist(1);
+      }
+
+      my @pads = map { $df->sv_at( $_ ) } @{ $self->{pads_at} };
+      shift @pads; # 0 doesn't exist
+
+      $_->is_padlist(1) for @pads;
+      $self->{pads} = \@pads;
+
       if( $df->ithreads ) {
          my $pad0_at = $self->{padsvs_at}[1]; # Yes, 1
 
@@ -710,10 +746,10 @@ sub _fixup
 
       # PADLIST[0] stores the names of the lexicals
       # The rest stores the actual pads
-      my ( $lexnames, @pads ) = $padlist->elems;
+      my ( $padnames, @pads ) = $padlist->elems;
 
-      $_->is_padlist(1) for $lexnames->elems;
-      $self->{lexnames_av} = $lexnames;
+      $_->is_padlist(1) for $padnames->elems;
+      $self->{padnames_av} = $padnames;
 
       $self->{padsvs_at} = \my @padsvs_at;
       foreach my $i ( 0 .. $#pads ) {
@@ -731,12 +767,12 @@ sub _fixup
 
          # Clear the obviously unused elements of lexnames and padlists
          foreach my $ix ( @{ delete $self->{constix} }, @{ delete $self->{gvix} } ) {
-            undef $self->{lexnames_av}->{elems_at}[$ix];
+            undef $self->{padnames_av}->{elems_at}[$ix];
             undef $_->{elems_at}[$ix] for @pads;
          }
       }
 
-      @{$self->{padnames}} = map { $_ and $_->isa( "Devel::MAT::SV::SCALAR" ) ? $_->pv : undef } $lexnames->elems;
+      @{$self->{padnames}} = map { $_ and $_->isa( "Devel::MAT::SV::SCALAR" ) ? $_->pv : undef } $padnames->elems;
    }
 }
 
@@ -838,7 +874,7 @@ Returns a list of all the lexical variable names
 sub padnames
 {
    my $self = shift;
-   return map { $self->padname( $_ ) } 1 .. scalar $self->{lexnames_av}->elems;
+   return map { $self->padname( $_ ) } 1 .. scalar $self->{padnames_av}->elems;
 }
 
 =head2 $sv = $cv->padsv( $depth, $padix )
@@ -900,9 +936,9 @@ sub _outrefs
       "the stash" => $self->stash,
       "the glob"  => $self->glob,
       "the padlist" => $self->padlist,
-      "the lexnames" => $self->{lexnames_av},
-      ( $self->{lexnames_av} ?
-         map { +"a lexical variable name" => $_ } $self->{lexnames_av}->elems :
+      "the padnames" => $self->{padnames_av},
+      ( $self->{padnames_av} ?
+         map { +"a pad variable name" => $_ } $self->{padnames_av}->elems :
          () ),
       "the constant value" => $self->constval,
       ( map { +"a constant" => $_ } $self->constants ),
@@ -911,14 +947,19 @@ sub _outrefs
             my $depth = $_;
             +"pad at depth ${depth}" => $pads->[$depth-1],
             pairmap {
-               my $name = $a ? "the lexical $a" : "a lexical";
+               my $name = $a ? "the lexical $a" : "a constant";
                $direct_or_rv->( $name => $b )
             } $self->lexvars( $depth )
          } 1 .. $maxdepth ),
       ( map {
             my $depth = $_;
-            my $args = $pads->[$depth-1]->elem( 0 );
-            $args ? map { $direct_or_rv->( "an argument at depth ${depth}" => $_ ) } $args->elems : ()
+            my $args = $pads->[$depth-1] && $pads->[$depth-1]->elem( 0 );
+            if( $args and $args->desc ne "UNDEF" ) {
+               map { $direct_or_rv->( "an argument at depth ${depth}" => $_ ) } $args->elems
+            }
+            else {
+               ()
+            }
          } 1 .. $maxdepth ),
    );
 }

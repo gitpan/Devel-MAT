@@ -6,6 +6,7 @@ use Module::Build;
 my $build = Module::Build->new(
    module_name => 'Devel::MAT',
    dist_version_from => 'lib/Devel/MAT/Dumper.pm',
+   dist_abstract => 'analyse perl memory usage',
 
    build_requires => {
       'Test::Identity' => 0,

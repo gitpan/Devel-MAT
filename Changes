@@ -1,5 +1,16 @@
 Revision history for Devel-MAT
 
+0.06    2013/10/28 00:14:24
+        [CHANGES]
+         * Don't yield constants from both anonymous subs -and- constix/constsv
+           lists
+         * Don't bother including all the PL_sv_undef lexnames
+
+        [BUGFIXES]
+         * Remember to store padlist in pre-5.18 perls
+         * PL_main_cv does not have a CvROOT(); need to use PL_main_root
+           (fixes unit test failures on non-threaded perls)
+
 0.05    2013/10/22 01:34:44
         [CHANGES]
          * Added ->find_symbol and ->find_glob

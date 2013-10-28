@@ -1,10 +1,10 @@
 {
-   "abstract" : "write a heap dump file for later analysis",
+   "abstract" : "analyse perl memory usage",
    "author" : [
       "Paul Evans <leonerd@leonerd.org.uk>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "Module::Build version 0.4007, CPAN::Meta::Converter version 2.132661",
+   "generated_by" : "Module::Build version 0.4007, CPAN::Meta::Converter version 2.132830",
    "license" : [
       "perl_5"
    ],
@@ -31,60 +31,75 @@
    "provides" : {
       "Devel::MAT::Dumper" : {
          "file" : "lib/Devel/MAT/Dumper.pm",
-         "version" : "0.05"
+         "version" : "0.06"
       },
       "Devel::MAT::Dumpfile" : {
          "file" : "lib/Devel/MAT/Dumpfile.pm",
-         "version" : "0.05"
+         "version" : "0.06"
       },
       "Devel::MAT::SV" : {
          "file" : "lib/Devel/MAT/SV.pm",
-         "version" : "0.05"
+         "version" : "0.06"
       },
       "Devel::MAT::SV::ARRAY" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::CODE" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::FORMAT" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::GLOB" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::HASH" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::IO" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::Immortal" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::LVALUE" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::NO" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::REGEXP" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::SCALAR" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::STASH" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::UNDEF" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::Unknown" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       },
       "Devel::MAT::SV::YES" : {
-         "file" : "lib/Devel/MAT/SV.pm"
+         "file" : "lib/Devel/MAT/SV.pm",
+         "version" : "0.06"
       }
    },
    "release_status" : "stable",
@@ -93,5 +108,5 @@
          "http://dev.perl.org/licenses/"
       ]
    },
-   "version" : "0.05"
+   "version" : "0.06"
 }

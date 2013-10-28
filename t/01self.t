@@ -128,7 +128,7 @@ BEGIN { our $LVREF = \substr our $TMPPV = "abc", 1, 2 }
    # There's likely 3 items in this list:
    #   2 constants within the main code
    #   1 value of the $DUMPFILE lexical itself
-   my @constants   = grep { pairgrep { $a eq 'a constant directly' }
+   my @constants   = grep { pairgrep { $a eq 'a constant' }
                                      $_->inrefs } @pvs;
 
    my ( $lexical ) = grep { pairgrep { $a eq 'the lexical $DUMPFILE directly' }

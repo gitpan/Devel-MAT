@@ -226,7 +226,12 @@ static void write_private_cv(FILE *fh, const CV *cv)
   else
     write_ptr(fh, NULL);
 
-  if(!CvISXSUB(cv) && !CvCONST(cv) && CvROOT(cv))
+  if(cv == PL_main_cv)
+    /* The PL_main_cv does not have a CvROOT(); instead that is found in
+     * PL_main_root
+     */
+    dump_optree(fh, cv, PL_main_root);
+  else if(!CvISXSUB(cv) && !CvCONST(cv) && CvROOT(cv))
     dump_optree(fh, cv, CvROOT(cv));
 
 #if (PERL_REVISION == 5) && (PERL_VERSION >= 18)

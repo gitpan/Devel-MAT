@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.05';
+our $VERSION = '0.06';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -240,23 +240,28 @@ boolean true and false. They are
 
 package Devel::MAT::SV::Immortal;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 use constant immortal => 1;
 sub _outrefs { () }
 
 package Devel::MAT::SV::UNDEF;
 use base qw( Devel::MAT::SV::Immortal );
+our $VERSION = '0.06';
 sub desc { "UNDEF" }
 
 package Devel::MAT::SV::YES;
 use base qw( Devel::MAT::SV::Immortal );
+our $VERSION = '0.06';
 sub desc { "YES" }
 
 package Devel::MAT::SV::NO;
 use base qw( Devel::MAT::SV::Immortal );
+our $VERSION = '0.06';
 sub desc { "NO" }
 
 package Devel::MAT::SV::Unknown;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 0xff );
 sub _load {}
 
@@ -266,6 +271,7 @@ sub _outrefs {}
 
 package Devel::MAT::SV::GLOB;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 1 );
 
 =head1 Devel::MAT::SV::GLOB
@@ -364,6 +370,7 @@ sub _outrefs
 
 package Devel::MAT::SV::SCALAR;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 2 );
 
 =head1 Devel::MAT::SV::SCALAR
@@ -459,6 +466,7 @@ sub _outrefs
 
 package Devel::MAT::SV::ARRAY;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 3 );
 
 =head1 Devel::MAT::SV::ARRAY
@@ -524,6 +532,7 @@ sub _outrefs
 
 package Devel::MAT::SV::HASH;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 4 );
 
 =head1 Devel::MAT::SV::HASH
@@ -614,6 +623,7 @@ sub _outrefs
 
 package Devel::MAT::SV::STASH;
 use base qw( Devel::MAT::SV::HASH );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 5 );
 
 =head1 Devel::MAT::SV::STASH
@@ -664,6 +674,7 @@ sub _outrefs
 
 package Devel::MAT::SV::CODE;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 6 );
 
 use List::Util qw( pairmap );
@@ -747,6 +758,7 @@ sub _fixup
       # PADLIST[0] stores the names of the lexicals
       # The rest stores the actual pads
       my ( $padnames, @pads ) = $padlist->elems;
+      $self->{pads} = \@pads;
 
       $_->is_padlist(1) for $padnames->elems;
       $self->{padnames_av} = $padnames;
@@ -914,7 +926,10 @@ sub lexvars
    my ( $depth ) = @_;
 
    my @svs = $self->padsvs( $depth );
-   return map { $self->padname( $_ ) => $svs[$_] } 1 .. $#svs;
+   return map {
+      my $name = $self->padname( $_ );
+      $name ? ( $name => $svs[$_] ) : ()
+   } 1 .. $#svs;
 }
 
 sub desc
@@ -938,7 +953,8 @@ sub _outrefs
       "the padlist" => $self->padlist,
       "the padnames" => $self->{padnames_av},
       ( $self->{padnames_av} ?
-         map { +"a pad variable name" => $_ } $self->{padnames_av}->elems :
+         map { $_ && $_->desc ne "UNDEF" ? ( +"a pad variable name" => $_ )
+                                         : () } $self->{padnames_av}->elems :
          () ),
       "the constant value" => $self->constval,
       ( map { +"a constant" => $_ } $self->constants ),
@@ -946,10 +962,7 @@ sub _outrefs
       ( map {
             my $depth = $_;
             +"pad at depth ${depth}" => $pads->[$depth-1],
-            pairmap {
-               my $name = $a ? "the lexical $a" : "a constant";
-               $direct_or_rv->( $name => $b )
-            } $self->lexvars( $depth )
+            pairmap { $direct_or_rv->( "the lexical $a" => $b ) } $self->lexvars( $depth )
          } 1 .. $maxdepth ),
       ( map {
             my $depth = $_;
@@ -966,6 +979,7 @@ sub _outrefs
 
 package Devel::MAT::SV::IO;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 7 );
 
 sub _load
@@ -996,6 +1010,7 @@ sub _outrefs
 
 package Devel::MAT::SV::LVALUE;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 8 );
 
 sub _load
@@ -1026,6 +1041,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REGEXP;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 9 );
 
 sub _load {}
@@ -1036,6 +1052,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::FORMAT;
 use base qw( Devel::MAT::SV );
+our $VERSION = '0.06';
 __PACKAGE__->register_type( 10 );
 
 sub _load {}

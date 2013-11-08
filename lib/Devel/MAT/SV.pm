@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -240,28 +240,28 @@ boolean true and false. They are
 
 package Devel::MAT::SV::Immortal;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 use constant immortal => 1;
 sub _outrefs { () }
 
 package Devel::MAT::SV::UNDEF;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 sub desc { "UNDEF" }
 
 package Devel::MAT::SV::YES;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 sub desc { "YES" }
 
 package Devel::MAT::SV::NO;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 sub desc { "NO" }
 
 package Devel::MAT::SV::Unknown;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 0xff );
 sub _load {}
 
@@ -271,7 +271,7 @@ sub _outrefs {}
 
 package Devel::MAT::SV::GLOB;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 1 );
 
 =head1 Devel::MAT::SV::GLOB
@@ -370,7 +370,7 @@ sub _outrefs
 
 package Devel::MAT::SV::SCALAR;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 2 );
 
 =head1 Devel::MAT::SV::SCALAR
@@ -466,7 +466,7 @@ sub _outrefs
 
 package Devel::MAT::SV::ARRAY;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 3 );
 
 =head1 Devel::MAT::SV::ARRAY
@@ -532,7 +532,7 @@ sub _outrefs
 
 package Devel::MAT::SV::HASH;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 4 );
 
 =head1 Devel::MAT::SV::HASH
@@ -623,7 +623,7 @@ sub _outrefs
 
 package Devel::MAT::SV::STASH;
 use base qw( Devel::MAT::SV::HASH );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 5 );
 
 =head1 Devel::MAT::SV::STASH
@@ -674,7 +674,7 @@ sub _outrefs
 
 package Devel::MAT::SV::CODE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 6 );
 
 use List::Util qw( pairmap );
@@ -979,7 +979,7 @@ sub _outrefs
 
 package Devel::MAT::SV::IO;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 7 );
 
 sub _load
@@ -1010,7 +1010,7 @@ sub _outrefs
 
 package Devel::MAT::SV::LVALUE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 8 );
 
 sub _load
@@ -1041,7 +1041,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REGEXP;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 9 );
 
 sub _load {}
@@ -1052,7 +1052,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::FORMAT;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 __PACKAGE__->register_type( 10 );
 
 sub _load {}

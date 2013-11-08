@@ -5,16 +5,14 @@ use Module::Build;
 
 my $build = Module::Build->new(
    module_name => 'Devel::MAT',
-   dist_version_from => 'lib/Devel/MAT/Dumper.pm',
-   dist_abstract => 'analyse perl memory usage',
-
    build_requires => {
       'Test::Identity' => 0,
       'Test::More' => '0.88', # done_testing
    },
    requires => {
       'List::Util' => '1.29', # pair* functions
-      'perl' => '5.012',      # SVt_REGEXP
+      'Module::Pluggable' => 0,
+      'perl' => '5.010',      # various XS failures on 5.8
    },
    auto_configure_requires => 0, # Don't add M::B to configure_requires
    license => 'perl',

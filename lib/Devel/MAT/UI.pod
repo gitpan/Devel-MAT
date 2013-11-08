@@ -1,0 +1,51 @@
+=head1 NAME
+
+C<Devel::MAT::UI> - extend the user interface of a C<Devel::MAT> explorer
+
+=head1 DESCRIPTION
+
+This virtual package provides methods that L<Devel::MAT::Tool> classes can use
+to extend the user interface provided by a L<Devel::MAT> explorer program.
+This package does not exist in a real F<.pm> file; instead, the methods should
+be provided directly by the explorer program. A tool class can rely on being
+able to call them without doing anything special - do not attempt to
+C<use Devel::MAT::UI>.
+
+=head1 METHODS
+
+=head2 $columm = Devel::MAT::UI->provides_svlist_column( type => ..., title => ... )
+
+A tool may call this to declare that it wishes to provide a new column to
+display in the main SV list on the user interface. It returns an opaque column
+value that should be passed to C<set_svlist_column_values> to provide data for
+the column.
+
+=over 4
+
+=item type => STRING
+
+The type of the column. For now, only C<text> is supported.
+
+=item title => STRING
+
+The title to display in the column header.
+
+=back
+
+=head2 Devel::MAT::UI->set_svlist_column_values( column => $column, from => $from )
+
+A tool may call this to provide the values to display in the SV list column it
+earlier created by calling C<provides_svlist_column>.
+
+C<$from> should be a CODE reference which is invoked with the address of each
+SV in the SV list, and should return the value to set in the column.
+
+ $value = $from->( $svaddr )
+
+=cut
+
+=head1 AUTHOR
+
+Paul Evans <leonerd@leonerd.org.uk>
+
+=cut

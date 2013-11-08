@@ -1,45 +1,28 @@
 NAME
-    `Devel::MAT::Dumper' - write a heap dump file for later analysis
-
-SYNOPSIS
-     use Devel::MAT::Dumper;
-
-     Devel::MAT::Dumper::dump( "path/to/the/file.pmat" );
+    `Devel::MAT' - analyse perl memory usage
 
 DESCRIPTION
-    This module provides the memory-dumping function that creates a heap
-    dump file which can later be read by Devel::MAT::Dumpfile. It provides a
-    single function which is not exported, which writes a file to the given
-    path.
+    A `Devel::MAT' instance loads a heapdump file, and provides a container
+    to store analysis tools to work on it. Tools may be provided that
+    conform to the Devel::MAT::Tool API, which can help analyse the data and
+    interact with the explorer user interface by using the methods in the
+    Devel::MAT::UI package.
 
-    The dump file will contain a representation of every SV in Perl's arena,
-    providing information about pointers between them, as well as other
-    information about the state of the process at the time it was created.
-    It contains a snapshot of the process at that moment in time, which can
-    later be loaded and analysed by various tools using
-    `Devel::MAT::Dumpfile'.
+CONSTRUCTOR
+  $pmat = Devel::MAT->load( $path, %args )
+    Loads a heap dump file from the given path, and returns a new
+    `Devel::MAT' instance wrapping it.
 
-IMPORT OPTIONS
-    The following `import' options control the behaviour of the module. They
-    may primarily be useful when used in the `-M' perl option:
+METHODS
+  $df = $pmat->dumpfile
+    Returns the underlying Devel::MAT::Dumpfile instance backing this
+    analysis object.
 
-  -dump_at_END
-    Installs an `END' block which writes a dump file at `END' time, just
-    before the interpreter exits.
+  @tools = $pmat->available_tools
+    Lists the Devel::MAT::Tool classes that are installed and available.
 
-     $ perl -MDevel::MAT::Dumper=-dump_at_END ...
-
-  -dump_at_SIGQUIT
-    Installs a handler for `SIGQUIT' to write a dump file if the signal is
-    received.
-
-     $ perl -MDevel::MAT::Dumper=-dump_at_SIGQUIT ...
-
-  -file $PATH
-    Sets the name of the file which is automatically dumped; defaults to
-    $0.pmat if not supplied.
-
-     $ perl -MDevel::MAT::Dumper=-file,foo.pmat ...
+  $tool = $pmat->load_tool( $name )
+    Loads the named Devel::MAT::Tool class.
 
 AUTHOR
     Paul Evans <leonerd@leonerd.org.uk>

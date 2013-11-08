@@ -10,7 +10,7 @@ use List::Util qw( pairgrep );
 use Scalar::Util qw( weaken );
 
 use Devel::MAT::Dumper;
-use Devel::MAT::Dumpfile;
+use Devel::MAT;
 
 my $ADDR = qr/0x[0-9a-f]+/;
 
@@ -19,7 +19,7 @@ my $DUMPFILE = "test.pmat";
 Devel::MAT::Dumper::dump( $DUMPFILE );
 END { unlink $DUMPFILE; }
 
-my $df = Devel::MAT::Dumpfile->load( $DUMPFILE );
+my $df = Devel::MAT->load( $DUMPFILE )->dumpfile;
 
 ok( my $defstash = $df->defstash, '$df has default stash' );
 

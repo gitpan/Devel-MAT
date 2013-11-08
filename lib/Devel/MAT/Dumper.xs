@@ -76,9 +76,13 @@ static void write_ptr(FILE *fh, const void *ptr)
   fwrite(&ptr, sizeof ptr, 1, fh);
 }
 
-static void write_double(FILE *fh, double v)
+static void write_nv(FILE *fh, NV v)
 {
-  fwrite(&v, sizeof(v), 1, fh);
+#if NVSIZE == 8
+  fwrite(&v, sizeof(double), 1, fh);
+#else
+  fwrite(&v, sizeof(long double), 1, fh);
+#endif
 }
 
 static void write_strn(FILE *fh, const char *s, size_t len)
@@ -154,7 +158,7 @@ static void write_private_sv(FILE *fh, const SV *sv)
   if(SvIOK(sv))
     write_uint(fh, SvUVX(sv));
   if(SvNOK(sv))
-    write_double(fh, SvNVX(sv));
+    write_nv(fh, SvNVX(sv));
   if(SvPOK(sv))
     write_strn(fh, SvPVX(sv), SvCUR(sv));
   if(SvROK(sv))
@@ -294,12 +298,17 @@ static void write_sv(FILE *fh, const SV *sv)
   switch(SvTYPE(sv)) {
     case SVt_IV:
     case SVt_NV:
+#if (PERL_REVISION == 5) && (PERL_VERSION < 12)
+    case SVt_RV:
+#endif
     case SVt_PV:
     case SVt_PVIV:
     case SVt_PVNV:
     case SVt_PVMG:
       type = PMAT_SVtSCALAR; break;
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 12)
     case SVt_REGEXP: type = PMAT_SVtREGEXP; break;
+#endif
     case SVt_PVGV: type = PMAT_SVtGLOB; break;
     case SVt_PVLV: type = PMAT_SVtLVALUE; break;
     case SVt_PVAV: type = PMAT_SVtARRAY; break;
@@ -382,11 +391,11 @@ static void dumpfh(FILE *fh)
 # error "Expected PTRSIZE to be either 4 or 8"
 #endif
 
-#if NVSIZE == 10
+#if NVSIZE == 10 || NVSIZE == 16
   flags |= 0x08; // long-double
 #elif NVSIZE == 8
 #else
-# error "Expected NVSIZE to be either 8 or 10"
+# error "Expected NVSIZE to be either 8, 10 or 16"
 #endif
 
 #ifdef USE_ITHREADS

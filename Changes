@@ -1,5 +1,15 @@
 Revision history for Devel-MAT
 
+0.07    2013/11/08 01:33:01
+        [CHANGES]
+         * Added new concept of Devel::MAT::Tool::* and Devel::MAT::UI
+         * Implement SV type counting and reachability analysis Tools
+         * Allow dumping on SIGABRT
+
+        [BUGFIXES]
+         * Support perl 5.10
+         * Support NVSIZE==16 architectures
+
 0.06    2013/10/28 00:14:24
         [CHANGES]
          * Don't yield constants from both anonymous subs -and- constix/constsv

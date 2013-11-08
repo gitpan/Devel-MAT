@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use feature qw( say switch );
 
-use Devel::MAT::Dumpfile;
+use Devel::MAT;
 
 sub show_sv
 {
@@ -66,7 +66,7 @@ sub show_sv
    }
 }
 
-my $df = Devel::MAT::Dumpfile->load( $ARGV[0] // die "Need dumpfile\n" );
+my $df = Devel::MAT->load( $ARGV[0] // die "Need dumpfile\n" )->dumpfile;
 
 my $addr = $ARGV[1] // die "Need addr\n";
 $addr = $df->defstash->addr if $addr eq "defstash";

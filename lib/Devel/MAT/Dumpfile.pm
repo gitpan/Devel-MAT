@@ -8,7 +8,7 @@ package Devel::MAT::Dumpfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 use Carp;
 use IO::Handle;   # ->read
@@ -170,7 +170,7 @@ sub load
    while( my $sv = $self->_read_sv ) {
       $heap{$sv->addr} = $sv;
 
-      my $pos = $fh->tell;
+      my $pos = $fh->IO::Seekable::tell; # fully-qualified method for 5.010
       $progress->( sprintf "Loading file %d of %d (%.2f%%)",
          $pos, $filelen, 100*$pos / $filelen ) if $progress and (keys(%heap) % 1000) == 0;
    }
@@ -574,7 +574,7 @@ sub find_glob
    my ( $parent, $shortname ) = $name =~ m/^(?:(.*)::)?(.+?)$/;
 
    my $stash;
-   if( length $parent ) {
+   if( defined $parent and length $parent ) {
       my $parentgv = $self->find_glob( $parent . "::" );
       $stash = $parentgv->stash or croak "$parent has no stash";
    }

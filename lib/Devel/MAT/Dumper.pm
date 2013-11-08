@@ -8,7 +8,7 @@ package Devel::MAT::Dumper;
 use strict;
 use warnings;
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 require XSLoader;
 XSLoader::load( __PACKAGE__, $VERSION );
@@ -49,10 +49,19 @@ the interpreter exits.
 
  $ perl -MDevel::MAT::Dumper=-dump_at_END ...
 
+=head2 -dump_at_SIGABRT
+
+Installs a handler for C<SIGABRT> to write a dump file if the signal is
+received. After dumping the file, the signal handler is removed and the signal
+re-raised.
+
+ $ perl -MDevel::MAT::Dumper=-dump_at_SIGABRT ...
+
 =head2 -dump_at_SIGQUIT
 
 Installs a handler for C<SIGQUIT> to write a dump file if the signal is
-received.
+received. The signal handler will remain in place and can be used several
+times.
 
  $ perl -MDevel::MAT::Dumper=-dump_at_SIGQUIT ...
 
@@ -82,8 +91,17 @@ sub import
       if( $sym eq "-dump_at_END" ) {
          $dump_at_END++;
       }
+      elsif( $sym eq "-dump_at_SIGABRT" ) {
+         $SIG{ABRT} = sub {
+            Devel::MAT::Dumper::dump( $dumpfile_name );
+            undef $SIG{ABRT};
+            kill ABRT => $$;
+         };
+      }
       elsif( $sym eq "-dump_at_SIGQUIT" ) {
-         $SIG{QUIT} = sub { Devel::MAT::Dumper::dump( $dumpfile_name ) };
+         $SIG{QUIT} = sub {
+            Devel::MAT::Dumper::dump( $dumpfile_name );
+         };
       }
       elsif( $sym eq "-file" ) {
          $dumpfile_name = shift;

@@ -3,9 +3,9 @@
 use strict;
 use warnings;
 
-use Devel::MAT::Dumpfile;
+use Devel::MAT;
 
-my $df = Devel::MAT::Dumpfile->load( $ARGV[0] // die "Need dumpfile\n" );
+my $df = Devel::MAT->load( $ARGV[0] // die "Need dumpfile\n" )->dumpfile;
 
 my @queue = ( [ $df->defstash, "" ] );
 while( @queue ) {

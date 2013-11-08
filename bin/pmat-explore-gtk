@@ -5,15 +5,18 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
+use Carp;
+
 use Glib qw( TRUE FALSE );
 use Gtk2 -init;
 use Gtk2::SimpleList;
 
-use Devel::MAT::Dumpfile;
+use Devel::MAT;
 
 use List::Util qw( pairs );
 use List::UtilsBy qw( sort_by );
 
+my $pmat;
 my $df;
 
 my $win = Gtk2::Window->new( "toplevel" );
@@ -131,6 +134,18 @@ add_menuitem( $navmenu, "To SV..." => sub {
 
 my $gotomenu = add_submenu( $menu, "Goto" );
 
+my $toolmenu;
+foreach my $tool ( sort Devel::MAT->available_tools ) {
+   my $tool_class = "Devel::MAT::Tool::$tool";
+   next unless $tool_class->can( "FOR_UI" ) and $tool_class->FOR_UI;
+
+   $toolmenu ||= add_submenu( $menu, "Tools" );
+   add_menuitem( $toolmenu, $tool, sub {
+      $pmat->load_tool( $tool, progress => \&progress );
+      progress( "Done" );
+   });
+}
+
 my $pane = Gtk2::HPaned->new;
 $winbox->add( $pane );
 
@@ -149,37 +164,68 @@ $win->show_all;
    }
 }
 
-$df = Devel::MAT::Dumpfile->load(
+$pmat = Devel::MAT->load(
    $ARGV[0] // die( "Need dumpfile\n" ),
    progress => \&progress,
 );
+$df = $pmat->dumpfile;
 
 foreach ( pairs $df->roots ) {
    my ( $desc, $sv ) = @$_;
    add_menuitem( $gotomenu, $desc, sub { history_nav( $sv ) } ) if $sv;
 }
 
-my $svlist = Gtk2::SimpleList->new(
-   "Address"     => "text",
-   "Description" => "text",
-   "Blessed"     => "text",
-   "Outrefs"     => "int",
-   "Inrefs"      => "int",
+my $svlist_model = Gtk2::ListStore->new(
+   "Glib::Int",
+   "Glib::String",
+   "Glib::String",
+   "Glib::Int",
+   "Glib::Int",
 );
-$svlist->get_column( $_ )->set_sort_column_id( $_ ) for 0 .. 4;
 
-$pane->add1( vscrollable( $svlist ) );
+my $svlist_view = Gtk2::TreeView->new;
+$svlist_view->set_model( $svlist_model );
+
+sub add_svlist_column
+{
+   my %args = @_;
+
+   my $column = Gtk2::TreeViewColumn->new_with_attributes(
+      $args{title}, Gtk2::CellRendererText->new, text => $args{idx},
+   );
+   $column->set_sort_column_id( $args{idx} );
+
+   $svlist_view->append_column( $column );
+}
+
+# First column is special
+$svlist_view->insert_column_with_data_func( -1, "Address",
+   Gtk2::CellRendererText->new, sub {
+      my ( $column, $renderer, $model, $iter ) = @_;
+      my $addr = $model->get( $iter, 0 );
+      $renderer->set( text => sprintf "%#x", $addr );
+   }, undef
+);
+$svlist_view->get_column( 0 )->set_sort_column_id( 0 );
+
+add_svlist_column title => "Description", idx => 1;
+add_svlist_column title => "Blessed",     idx => 2;
+add_svlist_column title => "Outrefs",     idx => 3;
+add_svlist_column title => "Inrefs",      idx => 4;
+
+$pane->add1( vscrollable( $svlist_view ) );
 
 my $total = scalar $df->heap;
 my $count = 0;
 foreach my $sv ( $df->heap ) {
-   push @{ $svlist->{data} }, [
-      sprintf( "%#x", $sv->addr ),
-      $sv->desc,
-      ( $sv->blessed ? $sv->blessed->stashname : "" ),
-      scalar $sv->outrefs,
-      scalar $sv->inrefs,
-   ];
+   my $iter = $svlist_model->append;
+   $svlist_model->set( $iter,
+      0 => $sv->addr,
+      1 => $sv->desc,
+      2 => ( $sv->blessed ? $sv->blessed->stashname : "" ),
+      3 => scalar $sv->outrefs,
+      4 => scalar $sv->inrefs,
+   );
    $count++;
    progress( sprintf "Loading GTK TreeView %d of %d (%.2f%%)",
       $count, $total, $count*100 / $total ) if ($count % 1000) == 0;
@@ -188,11 +234,11 @@ foreach my $sv ( $df->heap ) {
 my $table = Gtk2::Table->new( 1, 2 );
 $pane->add2( $table );
 
-$svlist->signal_connect( row_activated => sub {
+$svlist_view->signal_connect( row_activated => sub {
    my( $self, $path, $column ) = @_;
-   my $data = $self->get_row_data_from_path( $path );
+   my $iter = $svlist_model->get_iter( $path );
+   my $addr = $svlist_model->get( $iter, 0 );
 
-   my $addr = hex $data->[0];
    my $sv = $df->sv_at( $addr );
    history_nav( $sv );
 });
@@ -299,14 +345,13 @@ sub display_sv
 
    $table->show_all;
 
-   my $model = $svlist->get_model;
-   for( my $iter = $model->get_iter_first; $iter; $iter = $model->iter_next($iter) ) {
-      my $addr = $model->get_value( $iter, 0 );
+   for( my $iter = $svlist_model->get_iter_first; $iter; $iter = $svlist_model->iter_next( $iter ) ) {
+      my $addr = $svlist_model->get_value( $iter, 0 );
 
-      if( $sv->addr == hex $addr ) {
-         my $path = $model->get_path( $iter );
-         $svlist->scroll_to_cell( $path, $svlist->get_column( 0 ), '' );
-         $svlist->get_selection->select_path( $path );
+      if( $sv->addr == $addr ) {
+         my $path = $svlist_model->get_path( $iter );
+         $svlist_view->scroll_to_cell( $path, $svlist_view->get_column( 0 ), '' );
+         $svlist_view->get_selection->select_path( $path );
          last;
       }
    }
@@ -344,4 +389,62 @@ sub add_menuitem
    $mi->signal_connect( activate => $code );
 
    $menu->append( $mi );
+}
+
+## Tool plugin hooks
+my %COLTYPES; BEGIN { %COLTYPES = (
+   text => { gtk_type => "Glib::String" },
+); }
+sub Devel::MAT::UI::provides_svlist_column
+{
+   shift;
+   my %args = @_;
+
+   my $type = $COLTYPES{$args{type}} or
+      croak "Unrecognised column type $args{type}";
+
+   my $idx = $svlist_model->get_n_columns;
+
+   # Cannot add a new column to a model, we'll have to make a new bigger model,
+   # copy the data, set it
+   my $new_model = Gtk2::ListStore->new(
+      ( map { $svlist_model->get_column_type($_) } 0 .. $idx-1 ),
+      $type->{gtk_type},
+   );
+
+   for ( my $src_iter = $svlist_model->get_iter_first; $src_iter; $src_iter = $svlist_model->iter_next( $src_iter ) ) {
+      my $dest_iter = $new_model->append;
+      my @values = $svlist_model->get( $src_iter ), undef;
+      $new_model->set( $dest_iter, map { $_ => $values[$_] } 0 .. $#values );
+   }
+
+   $svlist_view->set_model( $svlist_model = $new_model );
+
+   my $column = Gtk2::TreeViewColumn->new_with_attributes(
+      $args{title}, Gtk2::CellRendererText->new, text => $idx,
+   );
+   $svlist_view->append_column( $column );
+
+   return $idx;
+}
+
+sub Devel::MAT::UI::set_svlist_column_values
+{
+   shift;
+   my %args = @_;
+
+   my $idx = $args{column};
+   my $from = $args{from};
+   ref $from eq "CODE" or croak "Expected 'from' as a CODE reference";
+
+   my $total = scalar $df->heap;
+   my $count = 0;
+   for ( my $iter = $svlist_model->get_iter_first; $iter; $iter = $svlist_model->iter_next( $iter ) ) {
+      my $addr = $svlist_model->get( $iter, 0 );
+      $svlist_model->set( $iter, $idx, $from->( $addr ) );
+
+      $count++;
+      progress( sprintf "Loading GTK TreeView %d of %d (%.2f%%)",
+         $count, $total, $count*100 / $total ) if ($count % 1000) == 0;
+   }
 }

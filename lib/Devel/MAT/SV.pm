@@ -10,21 +10,23 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 use Carp;
 use Scalar::Util qw( weaken );
-use List::Util qw( pairgrep pairmap pairs );
+use List::Util qw( pairgrep pairs );
 
 use constant immortal => 0;
 
 =head1 NAME
 
+C<Devel::MAT::SV> - represent a single SV from a heap dump
+
 =head1 DESCRIPTION
 
 Objects in this class represent individual SV variables found in the arena
-during a heap dump. Individual SVs are represented by subclasses, which are
-documented below.
+during a heap dump. Actual types of SV are represented by subclasses, which
+are documented below.
 
 =cut
 
@@ -41,14 +43,21 @@ my $direct_or_rv = sub {
 };
 
 my %types;
-sub register_type { $types{$_[1]} = $_[0] }
+sub register_type
+{
+   $types{$_[1]} = $_[0];
+   # generate the ->type constant method
+   ( my $typename = $_[0] ) =~ s/^Devel::MAT::SV:://;
+   no strict 'refs';
+   *{"$_[0]::type"} = sub () { $typename };
+}
 
 sub _new
 {
    my $class = shift;
    my ( $df, $addr ) = @_;
 
-   my $self = bless { addr => $addr, magic => [], inrefs_at => [] }, $class;
+   my $self = bless { addr => $addr, magic => [] }, $class;
    weaken( $self->{df} = $df );
    return $self;
 }
@@ -72,6 +81,13 @@ sub load
 }
 
 =head1 COMMON METHODS
+
+=cut
+
+=head2 $type = $sv->type
+
+Returns the major type of the SV. This is the class name minus the
+C<Devel::MAT::SV::> prefix.
 
 =cut
 
@@ -145,6 +161,20 @@ sub is_padlist
    return $self->{is_padlist};
 }
 
+=head2 ( $type, $sv, $type, $sv, ... ) = $sv->magic
+
+Returns a pair list of magic applied to the SV; each giving the type and
+target SV.
+
+=cut
+
+sub magic
+{
+   my $self = shift;
+   my $df = $self->{df};
+   return map { my ( $type, $addr ) = @$_; $type => $df->sv_at( $addr ) } @{ $self->{magic} };
+}
+
 # internal
 sub more_magic
 {
@@ -178,49 +208,6 @@ sub outrefs
    return @outrefs / 2;
 }
 
-sub _push_inref_at
-{
-   my $self = shift;
-   my ( $addr ) = @_;
-
-   push @{ $self->{inrefs_at} }, $addr;
-}
-
-=head2 %refs = $sv->inrefs
-
-Returns a name/value list giving names and other SV objects for each of the
-SVs that refer to this one. This is formed by the inverse mapping along the SV
-graph from C<outrefs>.
-
-=cut
-
-sub inrefs
-{
-   my $self = shift;
-   return @{ $self->{inrefs_at} } if !wantarray;
-
-   my $df = $self->{df};
-   my %seen;
-   my @inrefs;
-   foreach ( @{ $self->{inrefs_at} } ) {
-      next if $seen{$_}++;
-
-      if( m/^\d+$/ ) {
-         my $sv = $df->sv_at( $_ );
-         if( $sv ) {
-            push @inrefs, pairmap { $b == $self ? ( $a => $sv ) : () } $sv->outrefs;
-         }
-         else {
-            warn "Unable to find SV at $_ for $self inref\n";
-         }
-      }
-      else {
-         push @inrefs, $_ => undef;
-      }
-   }
-   return @inrefs;
-}
-
 =head1 IMMORTAL SVs
 
 Three special SV objects exist outside of the heap, to represent C<undef> and
@@ -240,28 +227,47 @@ boolean true and false. They are
 
 package Devel::MAT::SV::Immortal;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 use constant immortal => 1;
 sub _outrefs { () }
 
 package Devel::MAT::SV::UNDEF;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 sub desc { "UNDEF" }
+sub type { "UNDEF" }
 
 package Devel::MAT::SV::YES;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 sub desc { "YES" }
+sub type { "SCALAR" }
+
+# Pretend to be 1 / "1"
+sub uv { 1 }
+sub nv { 1.0 }
+sub pv { "1" }
+sub rv { undef }
+sub is_weak { '' }
+sub name {}
 
 package Devel::MAT::SV::NO;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 sub desc { "NO" }
+sub type { "SCALAR" }
+
+# Pretend to be 0 / ""
+sub uv { 0 }
+sub nv { 0.0 }
+sub pv { "0" }
+sub rv { undef }
+sub is_weak { '' }
+sub name {}
 
 package Devel::MAT::SV::Unknown;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 0xff );
 sub _load {}
 
@@ -271,7 +277,7 @@ sub _outrefs {}
 
 package Devel::MAT::SV::GLOB;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 1 );
 
 =head1 Devel::MAT::SV::GLOB
@@ -286,14 +292,9 @@ sub _load
    my ( $df ) = @_;
 
    $self->{name}      = $df->_read_str;
-   $self->{stash_at}  = $df->_read_ptr;
-   $self->{scalar_at} = $df->_read_ptr;
-   $self->{array_at}  = $df->_read_ptr;
-   $self->{hash_at}   = $df->_read_ptr;
-   $self->{code_at}   = $df->_read_ptr;
-   $self->{egv_at}    = $df->_read_ptr;
-   $self->{io_at}     = $df->_read_ptr;
-   $self->{form_at}   = $df->_read_ptr;
+
+   @{$self}{qw( stash_at scalar_at array_at hash_at code_at egv_at io_at form_at )} =
+      $df->_read_ptrs(8);
 }
 
 sub _fixup
@@ -370,7 +371,7 @@ sub _outrefs
 
 package Devel::MAT::SV::SCALAR;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 2 );
 
 =head1 Devel::MAT::SV::SCALAR
@@ -466,7 +467,7 @@ sub _outrefs
 
 package Devel::MAT::SV::ARRAY;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 3 );
 
 =head1 Devel::MAT::SV::ARRAY
@@ -481,7 +482,7 @@ sub _load
    my ( $df ) = @_;
 
    my $n = $df->_read_uint;
-   $self->{elems_at} = [ map { $df->_read_ptr } 1 .. $n ];
+   $self->{elems_at} = [ $n ? $df->_read_ptrs($n) : () ];
 }
 
 sub name
@@ -532,7 +533,7 @@ sub _outrefs
 
 package Devel::MAT::SV::HASH;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 4 );
 
 =head1 Devel::MAT::SV::HASH
@@ -561,6 +562,18 @@ sub name
    my $self = shift;
    return unless $self->{glob_at};
    return '%' . $self->{df}->sv_at( $self->{glob_at} )->stashname;
+}
+
+=head2 $av = $hv->backrefs
+
+Returns the AV containing weak reference backrefs
+
+=cut
+
+sub backrefs
+{
+   my $self = shift;
+   return $self->{df}->sv_at( $self->{backrefs_at} );
 }
 
 =head2 @keys = $hv->keys
@@ -611,10 +624,9 @@ sub desc
 sub _outrefs
 {
    my $self = shift;
-   my $df = $self->{df};
 
    return (
-      "the backrefs list" => $df->sv_at( $self->{backrefs_at} ),
+      "the backrefs list" => $self->backrefs,
       map {
          $direct_or_rv->( "value {$_}" => $self->value( $_ ) )
       } $self->keys
@@ -623,7 +635,7 @@ sub _outrefs
 
 package Devel::MAT::SV::STASH;
 use base qw( Devel::MAT::SV::HASH );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 5 );
 
 =head1 Devel::MAT::SV::STASH
@@ -639,7 +651,9 @@ sub _load
    my ( $df ) = @_;
 
    $self->{name} = $df->_read_str;
-   $self->{mro_isa_at} = $df->_read_ptr;
+
+   @{$self}{qw( mro_linearall_at mro_linearcurrent_at mro_nextmethod_at mro_isa_at )} =
+      $df->_read_ptrs(4);
 
    $self->SUPER::_load( @_ );
 }
@@ -669,12 +683,15 @@ sub _outrefs
    my $self = shift;
    my $df = $self->{df};
    return $self->SUPER::_outrefs,
-      "the mro ISA cache" => $df->sv_at( $self->{mro_isa_at} );
+      "the mro linear all HV"  => $df->sv_at( $self->{mro_linearall_at} ),
+      "the mro linear current" => $df->sv_at( $self->{mro_linearcurrent_at} ),
+      "the mro next::method"   => $df->sv_at( $self->{mro_nextmethod_at} ),
+      "the mro ISA cache"      => $df->sv_at( $self->{mro_isa_at} );
 }
 
 package Devel::MAT::SV::CODE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 6 );
 
 use List::Util qw( pairmap );
@@ -690,12 +707,11 @@ sub _load
    my $self = shift;
    my ( $df ) = @_;
 
-   $self->{stash_at}    = $df->_read_ptr;
-   $self->{glob_at}     = $df->_read_ptr;
+   @{$self}{qw( stash_at glob_at )} = $df->_read_ptrs(2);
+
    $self->{file}        = $df->_read_str;
-   $self->{scope_at}    = $df->_read_ptr;
-   $self->{padlist_at}  = $df->_read_ptr;
-   $self->{constval_at} = $df->_read_ptr;
+
+   @{$self}{qw( outside_at padlist_at constval_at )} = $df->_read_ptrs(3);
 
    $self->{consts_at} = \my @consts;
    $self->{constix}   = \my @constix;
@@ -800,15 +816,15 @@ sub _fixup
 
 =head2 $sv = $cv->constval
 
-Returns the stash, glob, filename, scope, padlist or constant value of the
-code.
+Returns the stash, glob, filename, scope, padlist, padnames or constant value
+of the code.
 
 =cut
 
 sub stash    { my $self = shift; return $self->{df}->sv_at( $self->{stash_at} ) }
 sub glob     { my $self = shift; return $self->{df}->sv_at( $self->{glob_at} ) }
 sub file     { my $self = shift; return $self->{file} }
-sub scope    { my $self = shift; return $self->{df}->sv_at( $self->{scope_at} ) }
+sub scope    { my $self = shift; return $self->{df}->sv_at( $self->{outside_at} ) }
 sub padlist  { my $self = shift; return $self->{df}->sv_at( $self->{padlist_at} ) }
 sub constval { my $self = shift; return $self->{df}->sv_at( $self->{constval_at} ) }
 
@@ -889,6 +905,18 @@ sub padnames
    return map { $self->padname( $_ ) } 1 .. scalar $self->{padnames_av}->elems;
 }
 
+=head2 $av = $cv->padnames_av
+
+Returns the AV reference directly which stores the pad names.
+
+=cut
+
+sub padnames_av
+{
+   my $self = shift;
+   return $self->{padnames_av};
+}
+
 =head2 $sv = $cv->padsv( $depth, $padix )
 
 Returns the SV at the $padix'th index of the $depth'th pad. $depth is
@@ -919,6 +947,24 @@ sub padsvs
    my $df = $self->{df};
    return map { $df->sv_at( $_ ) } @{ $self->{padsvs_at}[$depth] };
 }
+
+=head2 @avs = $cv->pads
+
+Returns a list of the actual pad AVs.
+
+=cut
+
+sub pads
+{
+   my $self = shift;
+   return $self->{pads} ? @{ $self->{pads} } : ();
+}
+
+=head2 ( $name, $sv, $name, $sv, ... ) = $cv->lexvars( $depth )
+
+Returns a name/value list of the lexical variables at the given depth.
+
+=cut
 
 sub lexvars
 {
@@ -979,7 +1025,7 @@ sub _outrefs
 
 package Devel::MAT::SV::IO;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 7 );
 
 sub _load
@@ -987,9 +1033,7 @@ sub _load
    my $self = shift;
    my ( $df ) = @_;
 
-   $self->{topgv_at}    = $df->_read_ptr;
-   $self->{formatgv_at} = $df->_read_ptr;
-   $self->{bottomgv_at} = $df->_read_ptr;
+   @{$self}{qw( topgv_at formatgv_at bottomgv_at )} = $df->_read_ptrs(3);
 }
 
 sub topgv    { my $self = shift; $self->{df}->sv_at( $self->{topgv_at}    ) }
@@ -1010,7 +1054,7 @@ sub _outrefs
 
 package Devel::MAT::SV::LVALUE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 8 );
 
 sub _load
@@ -1024,7 +1068,7 @@ sub _load
    $self->{targ_at} = $df->_read_ptr;
 }
 
-sub type   { my $self = shift; return $self->{type} }
+sub lvtype { my $self = shift; return $self->{type} }
 sub off    { my $self = shift; return $self->{off} }
 sub len    { my $self = shift; return $self->{len} }
 sub target { my $self = shift; return $self->{df}->sv_at( $self->{targ_at} ) }
@@ -1041,7 +1085,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REGEXP;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 9 );
 
 sub _load {}
@@ -1052,12 +1096,23 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::FORMAT;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 __PACKAGE__->register_type( 10 );
 
 sub _load {}
 
 sub desc { "FORMAT()" }
+
+sub _outrefs { () }
+
+package Devel::MAT::SV::INVLIST;
+use base qw( Devel::MAT::SV );
+our $VERSION = '0.08';
+__PACKAGE__->register_type( 11 );
+
+sub _load {}
+
+sub desc { "INVLIST()" }
 
 sub _outrefs { () }
 

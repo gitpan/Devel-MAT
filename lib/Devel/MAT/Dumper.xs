@@ -27,6 +27,7 @@ enum PMAT_SVt {
   PMAT_SVtLVALUE,
   PMAT_SVtREGEXP,
   PMAT_SVtFORMAT,
+  PMAT_SVtINVLIST,
 
   PMAT_SVtMAGIC = 0x80,
 };
@@ -208,7 +209,27 @@ static void write_private_stash(FILE *fh, const HV *stash)
 
   write_str(fh, HvNAME(stash));
 
-  write_ptr(fh, mro_meta ? mro_meta->isa : NULL);
+  if(mro_meta) {
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 12)
+    write_ptr(fh, mro_meta->mro_linear_all);
+    write_ptr(fh, mro_meta->mro_linear_current);
+#else
+    write_ptr(fh, NULL);
+    write_ptr(fh, NULL);
+#endif
+    write_ptr(fh, mro_meta->mro_nextmethod);
+#if (PERL_REVISION == 5) && ((PERL_VERSION > 10) || (PERL_VERSION == 10 && PERL_SUBVERSION > 0))
+    write_ptr(fh, mro_meta->isa);
+#else
+    write_ptr(fh, NULL);
+#endif
+  }
+  else {
+    write_ptr(fh, NULL);
+    write_ptr(fh, NULL);
+    write_ptr(fh, NULL);
+    write_ptr(fh, NULL);
+  }
 
   write_private_hv(fh, stash);
 }
@@ -250,7 +271,7 @@ static void write_private_cv(FILE *fh, const CV *cv)
     for(i = 0; i <= PadlistNAMESMAX(padlist); i++) {
       write_u8(fh, PMAT_CODEx_PADNAME);
       write_uint(fh, i);
-      if(PadnamePV(names[i]))
+      if(names[i] && PadnamePV(names[i]))
         write_str(fh, PadnamePV(names[i]));
       else
         write_uint(fh, -1);
@@ -306,6 +327,9 @@ static void write_sv(FILE *fh, const SV *sv)
     case SVt_PVNV:
     case SVt_PVMG:
       type = PMAT_SVtSCALAR; break;
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 19)
+    case SVt_INVLIST: type = PMAT_SVtINVLIST; break;
+#endif
 #if (PERL_REVISION == 5) && (PERL_VERSION >= 12)
     case SVt_REGEXP: type = PMAT_SVtREGEXP; break;
 #endif
@@ -339,6 +363,7 @@ static void write_sv(FILE *fh, const SV *sv)
 
     case PMAT_SVtREGEXP:
     case PMAT_SVtFORMAT:
+    case PMAT_SVtINVLIST:
       // nothing special
       break;
   }
@@ -444,7 +469,11 @@ static void dumpfh(FILE *fh)
   write_ptr(fh, PL_debstash);
   write_ptr(fh, PL_stashcache);
   write_ptr(fh, PL_isarev);
+#if (PERL_REVISION == 5) && ((PERL_VERSION > 10) || (PERL_VERSION == 10 && PERL_SUBVERSION > 0))
   write_ptr(fh, PL_registered_mros);
+#else
+  write_ptr(fh, NULL);
+#endif
 
   // Stack
   write_uint(fh, PL_stack_sp - PL_stack_base + 1);

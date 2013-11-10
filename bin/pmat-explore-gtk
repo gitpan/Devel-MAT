@@ -13,11 +13,17 @@ use Gtk2::SimpleList;
 
 use Devel::MAT;
 
+use File::ShareDir qw( module_file );
 use List::Util qw( pairs );
 use List::UtilsBy qw( sort_by );
 
 my $pmat;
 my $df;
+
+my %ICONS;        # {$name} = $pixbuf
+
+Devel::MAT::UI->register_icon( name => "type-$_", svg => "icons/type-$_.svg" ) for
+   qw( SCALAR ARRAY HASH CODE GLOB STASH REGEXP IO );
 
 my $win = Gtk2::Window->new( "toplevel" );
 $win->signal_connect( destroy => sub { Gtk2->main_quit } );
@@ -141,7 +147,8 @@ foreach my $tool ( sort Devel::MAT->available_tools ) {
 
    $toolmenu ||= add_submenu( $menu, "Tools" );
    add_menuitem( $toolmenu, $tool, sub {
-      $pmat->load_tool( $tool, progress => \&progress );
+      my $tool = $pmat->load_tool( $tool, progress => \&progress );
+      $tool->init_ui( "Devel::MAT::UI" );
       progress( "Done" );
    });
 }
@@ -170,12 +177,16 @@ $pmat = Devel::MAT->load(
 );
 $df = $pmat->dumpfile;
 
+# We're going to be using Inrefs
+$pmat->load_tool( "Inrefs", progress => \&progress );
+
 foreach ( pairs $df->roots ) {
    my ( $desc, $sv ) = @$_;
    add_menuitem( $gotomenu, $desc, sub { history_nav( $sv ) } ) if $sv;
 }
 
 my $svlist_model = Gtk2::ListStore->new(
+   "Glib::String",
    "Glib::Int",
    "Glib::String",
    "Glib::String",
@@ -198,20 +209,29 @@ sub add_svlist_column
    $svlist_view->append_column( $column );
 }
 
-# First column is special
+# First two columns are special
+$svlist_view->insert_column_with_data_func( -1, " ",
+   Gtk2::CellRendererPixbuf->new, sub {
+      my ( $column, $renderer, $model, $iter ) = @_;
+      my $type = $model->get( $iter, 0 );
+      my $icon = $ICONS{"type-$type"} or warn "No icon for type $type";
+
+      $renderer->set( pixbuf => $icon ) if $icon;
+   }, undef
+);
 $svlist_view->insert_column_with_data_func( -1, "Address",
    Gtk2::CellRendererText->new, sub {
       my ( $column, $renderer, $model, $iter ) = @_;
-      my $addr = $model->get( $iter, 0 );
+      my $addr = $model->get( $iter, 1 );
       $renderer->set( text => sprintf "%#x", $addr );
    }, undef
 );
-$svlist_view->get_column( 0 )->set_sort_column_id( 0 );
+$svlist_view->get_column( $_ )->set_sort_column_id( $_ ) for 0 .. 1;
 
-add_svlist_column title => "Description", idx => 1;
-add_svlist_column title => "Blessed",     idx => 2;
-add_svlist_column title => "Outrefs",     idx => 3;
-add_svlist_column title => "Inrefs",      idx => 4;
+add_svlist_column title => "Description", idx => 2;
+add_svlist_column title => "Blessed",     idx => 3;
+add_svlist_column title => "Outrefs",     idx => 4;
+add_svlist_column title => "Inrefs",      idx => 5;
 
 $pane->add1( vscrollable( $svlist_view ) );
 
@@ -220,11 +240,12 @@ my $count = 0;
 foreach my $sv ( $df->heap ) {
    my $iter = $svlist_model->append;
    $svlist_model->set( $iter,
-      0 => $sv->addr,
-      1 => $sv->desc,
-      2 => ( $sv->blessed ? $sv->blessed->stashname : "" ),
-      3 => scalar $sv->outrefs,
-      4 => scalar $sv->inrefs,
+      0 => $sv->type,
+      1 => $sv->addr,
+      2 => $sv->desc,
+      3 => ( $sv->blessed ? $sv->blessed->stashname : "" ),
+      4 => scalar $sv->outrefs,
+      5 => scalar $sv->inrefs,
    );
    $count++;
    progress( sprintf "Loading GTK TreeView %d of %d (%.2f%%)",
@@ -237,7 +258,7 @@ $pane->add2( $table );
 $svlist_view->signal_connect( row_activated => sub {
    my( $self, $path, $column ) = @_;
    my $iter = $svlist_model->get_iter( $path );
-   my $addr = $svlist_model->get( $iter, 0 );
+   my $addr = $svlist_model->get( $iter, 1 );
 
    my $sv = $df->sv_at( $addr );
    history_nav( $sv );
@@ -261,6 +282,8 @@ sub table_add
    $table->attach( $widget,                    1, 2, $next_row, $next_row + 1, $xoptions, $yoptions, 0, 3 );
 }
 
+my @more_details; # [] = { type, title, render }
+
 sub display_sv
 {
    my ( $sv ) = @_;
@@ -272,7 +295,7 @@ sub display_sv
 
    table_add( "SvREFCNT" => Gtk2::Label->new( $sv->refcnt ) );
 
-   my $type = ref($sv) =~ s/^Devel::MAT::SV:://r;
+   my $type = $sv->type;
    table_add( "Type" => Gtk2::Label->new( $type ) );
 
    table_add( "Description" => Gtk2::Label->new( $sv->desc ) );
@@ -298,6 +321,20 @@ sub display_sv
       when([ "SCALAR", "ARRAY", "HASH", "STASH", "CODE" ]) {
          table_add( "Name", Gtk2::Label->new( $sv->name ) ) if defined $sv->name;
       }
+   }
+
+   foreach my $extra ( @more_details ) {
+      my $data = $extra->{render}->( $sv );
+      defined $data or next;
+
+      my $widget;
+      given( $extra->{type} ) {
+         when( "text" ) { $widget = Gtk2::Label->new( $data ) }
+         when( "icon" ) { $widget = Gtk2::Image->new_from_pixbuf( $ICONS{$data} ) }
+         default        { die "Unable to handle SV detail type $extra->{type}" }
+      }
+
+      table_add( $extra->{title} => $widget )
    }
 
    my $outrefs = Gtk2::SimpleList->new(
@@ -346,7 +383,7 @@ sub display_sv
    $table->show_all;
 
    for( my $iter = $svlist_model->get_iter_first; $iter; $iter = $svlist_model->iter_next( $iter ) ) {
-      my $addr = $svlist_model->get_value( $iter, 0 );
+      my $addr = $svlist_model->get_value( $iter, 1 );
 
       if( $sv->addr == $addr ) {
          my $path = $svlist_model->get_path( $iter );
@@ -392,8 +429,25 @@ sub add_menuitem
 }
 
 ## Tool plugin hooks
+
+sub Devel::MAT::UI::register_icon
+{
+   shift;
+   my %args = @_;
+   my $name = delete $args{name};
+
+   my $path = delete $args{svg} or die "Cannot register an icon - need an SVG path";
+
+   $ICONS{$name} = Gtk2::Gdk::Pixbuf->new_from_file( module_file( "Devel::MAT::UI", $path ) );
+}
+
 my %COLTYPES; BEGIN { %COLTYPES = (
-   text => { gtk_type => "Glib::String" },
+   text => { store_type => "Glib::String", renderer => "Gtk2::CellRendererText",   attr => "text"   },
+   icon => { store_type => "Glib::String", renderer => "Gtk2::CellRendererPixbuf", func => sub {
+      my ( $column, $cell, $model, $iter, $idx ) = @_;
+      my $name = $model->get( $iter, $idx ) or return;
+      $cell->set( pixbuf => $ICONS{$name} );
+   } },
 ); }
 sub Devel::MAT::UI::provides_svlist_column
 {
@@ -409,7 +463,7 @@ sub Devel::MAT::UI::provides_svlist_column
    # copy the data, set it
    my $new_model = Gtk2::ListStore->new(
       ( map { $svlist_model->get_column_type($_) } 0 .. $idx-1 ),
-      $type->{gtk_type},
+      $type->{store_type},
    );
 
    for ( my $src_iter = $svlist_model->get_iter_first; $src_iter; $src_iter = $svlist_model->iter_next( $src_iter ) ) {
@@ -421,9 +475,18 @@ sub Devel::MAT::UI::provides_svlist_column
    $svlist_view->set_model( $svlist_model = $new_model );
 
    my $column = Gtk2::TreeViewColumn->new_with_attributes(
-      $args{title}, Gtk2::CellRendererText->new, text => $idx,
+      $args{title},
+      my $renderer = $type->{renderer}->new,
    );
+
+   if( $type->{attr} ) {
+      $column->set_attributes( $renderer, $type->{attr} => $idx );
+   }
+   elsif( $type->{func} ) {
+      $column->set_cell_data_func( $renderer, $type->{func}, $idx );
+   }
    $svlist_view->append_column( $column );
+   $column->set_sort_column_id( $idx );
 
    return $idx;
 }
@@ -440,11 +503,25 @@ sub Devel::MAT::UI::set_svlist_column_values
    my $total = scalar $df->heap;
    my $count = 0;
    for ( my $iter = $svlist_model->get_iter_first; $iter; $iter = $svlist_model->iter_next( $iter ) ) {
-      my $addr = $svlist_model->get( $iter, 0 );
-      $svlist_model->set( $iter, $idx, $from->( $addr ) );
+      my $addr = $svlist_model->get( $iter, 1 );
+      my $data = $from->( $df->sv_at( $addr ) );
+
+      $svlist_model->set( $iter, $idx, $data );
 
       $count++;
       progress( sprintf "Loading GTK TreeView %d of %d (%.2f%%)",
          $count, $total, $count*100 / $total ) if ($count % 1000) == 0;
    }
+}
+
+sub Devel::MAT::UI::provides_sv_detail
+{
+   shift;
+   my %args = @_;
+
+   push @more_details, {
+      type   => $args{type},
+      title  => $args{title},
+      render => $args{render},
+   };
 }

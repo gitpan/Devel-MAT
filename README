@@ -24,6 +24,26 @@ METHODS
   $tool = $pmat->load_tool( $name )
     Loads the named Devel::MAT::Tool class.
 
+  @text = $pmat->identify( $sv )
+    Traces the tree of inrefs from `$sv' back towards the known roots,
+    returning a textual description as a list of lines of text.
+
+    The lines of text, when printed, will form a reverse reference tree,
+    showing the paths from the given SV back to the roots.
+
+  $sv = $pmat->find_symbol( $name )
+    Attempts to walk the symbol table looking for a symbol of the given
+    name, which must include the sigil.
+
+     $Package::Name::symbol_name => to return a SCALAR SV
+     @Package::Name::symbol_name => to return an ARRAY SV
+     %Package::Name::symbol_name => to return a HASH SV
+     &Package::Name::symbol_name => to return a CODE SV
+
+  $gv = $pmat->find_glob( $name )
+    Attempts to walk to the symbol table looking for a symbol of the given
+    name, returning the `GLOB' object if found.
+
 AUTHOR
     Paul Evans <leonerd@leonerd.org.uk>
 

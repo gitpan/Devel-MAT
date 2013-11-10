@@ -13,6 +13,25 @@ C<use Devel::MAT::UI>.
 
 =head1 METHODS
 
+=head2 Devel::MAT::UI->register_icon( name => $name, ... )
+
+A tool may call this to register a named icon image with the UI, for later use
+in an SV list column or SV detail. The name of the icon is taken from the
+C<name> key, and the specific UI implementation will use one of the other keys
+to provide the value for its type.
+
+This icon is used by SV list columns or SV details where the C<type> is
+C<icon>. The value set gives the name the icon was registered with.
+
+=over 4
+
+=item svg => PATH (GTK)
+
+Gives a path name to an F<SVG> file containing image data. This path is
+relative to the share directory of the package, managed by L<File::ShareDir>.
+
+=back
+
 =head2 $columm = Devel::MAT::UI->provides_svlist_column( type => ..., title => ... )
 
 A tool may call this to declare that it wishes to provide a new column to
@@ -24,7 +43,7 @@ the column.
 
 =item type => STRING
 
-The type of the column. For now, only C<text> is supported.
+The type of the column. This may be C<text> or C<icon>.
 
 =item title => STRING
 
@@ -37,10 +56,45 @@ The title to display in the column header.
 A tool may call this to provide the values to display in the SV list column it
 earlier created by calling C<provides_svlist_column>.
 
-C<$from> should be a CODE reference which is invoked with the address of each
-SV in the SV list, and should return the value to set in the column.
+=over 4
 
- $value = $from->( $svaddr )
+=item column => SCALAR
+
+The value returned from C<provides_svlist_column>.
+
+=item from => CODE
+
+A function to generate the value to store for each SV. Is invoked with each SV
+in the SV list, and should return the value to set in the column.
+
+ $value = $from->( $sv )
+
+=back
+
+=head2 Devel::MAT::UI->provides_sv_detail( type => $type, title => $title, render => $render )
+
+A tool may call this to declare that it provides a section of detail about an
+SV.
+
+=over 4
+
+=item type => STRING
+
+The type of the column. This may be C<text> or C<icon>.
+
+=item title => STRING
+
+The title to display alongside the detail cell on the main SV display pane.
+
+=item render => CODE
+
+A function to generate the display for a given SV address. It is invoked with
+an SV to display, and should a value whose meaning depends on the type. If it
+returns unde then the row is not displayed for this SV.
+
+ $value = $render->( $sv )
+
+=back
 
 =cut
 

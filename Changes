@@ -1,5 +1,18 @@
 Revision history for Devel-MAT
 
+0.08    2013/11/10 19:27:30
+        [CHANGES]
+         * Chase more fields of an HV's mro_meta
+         * Document how Tools may interact with the UI
+         * Allow Tools to register and use icons on the UI
+         * Rework Reachability tool to analyse kinds of reachability
+         * Move inrefs logic into its own new Inrefs Tool
+         * Slight performance improvement to dumpfile loading
+         * Display icons also for general SV type
+
+        [BUGFIXES]
+         * Ensure ->find_symbol actually works for deeply-nested symbols
+
 0.07    2013/11/08 01:33:01
         [CHANGES]
          * Added new concept of Devel::MAT::Tool::* and Devel::MAT::UI

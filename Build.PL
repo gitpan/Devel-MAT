@@ -10,11 +10,15 @@ my $build = Module::Build->new(
       'Test::More' => '0.88', # done_testing
    },
    requires => {
+      'File::ShareDir' => 0,
       'List::Util' => '1.29', # pair* functions
       'Module::Pluggable' => 0,
       'perl' => '5.010',      # various XS failures on 5.8
    },
    auto_configure_requires => 0, # Don't add M::B to configure_requires
+   share_dir => {
+      module => { "Devel::MAT::UI" => "share" },
+   },
    license => 'perl',
    create_makefile_pl => 'small',
    create_license => 1,

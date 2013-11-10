@@ -99,6 +99,9 @@ An SV:
 
   type: STASH
     STR     NAME
+    PTR     MRO_LINEAR_ALL
+    PTR     MRO_LINEAR_CURRENT
+    PTR     MRO_NEXTMETHOD
     PTR     MRO_ISA
     [then fields as hash]
 
@@ -106,7 +109,8 @@ An SV:
     PTR     STASH
     PTR     GLOB
     STR     FILE
-    PTR     SCOPE
+    PTR     OUTSIDE
+    PTR     PADLIST
     PTR     CONSTVAL
     {U8     TYPE
      ...         }    until TYPE==0

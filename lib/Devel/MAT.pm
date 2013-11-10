@@ -8,7 +8,10 @@ package Devel::MAT;
 use strict;
 use warnings;
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
+
+use Carp;
+use List::Util qw( pairs );
 
 use Devel::MAT::Dumpfile;
 
@@ -93,6 +96,128 @@ sub load_tool
 
    my $tool_class = "Devel::MAT::Tool::$name";
    return $self->{tools}{$name} ||= $tool_class->new( $self, %args );
+}
+
+=head2 @text = $pmat->identify( $sv )
+
+Traces the tree of inrefs from C<$sv> back towards the known roots, returning
+a textual description as a list of lines of text.
+
+The lines of text, when printed, will form a reverse reference tree, showing
+the paths from the given SV back to the roots.
+
+=cut
+
+sub identify
+{
+   my $self = shift;
+   my ( $sv, $seen ) = @_;
+
+   if( $sv->immortal ) {
+      return ( "undef" ) if $sv->type eq "UNDEF";
+      return $sv->uv ? "true" : "false";
+   }
+
+   my $svaddr = $sv->addr;
+
+   foreach ( pairs $self->dumpfile->roots ) {
+      my ( $name, $root ) = @$_;
+      return $name if $root and $svaddr == $root->addr;
+   }
+
+   $seen ||= { $sv->addr => 1 };
+
+   my @ret = ();
+   my %inrefs = $sv->inrefs;
+   foreach my $desc ( sort keys %inrefs ) {
+      my $ref = $inrefs{$desc};
+
+      if( !defined $ref ) {
+         push @ret, $desc; # e.g. "a value on the stack"
+         next;
+      }
+
+      my @me;
+      if( $ref == $sv ) {
+         @me = "itself";
+      }
+      elsif( $seen->{$ref->addr} ) {
+         @me = "already found";
+      }
+      else {
+         @me = $self->identify( $ref, $seen );
+      }
+
+      $seen->{$ref->addr}++;
+
+      push @ret,
+         sprintf( "%s of %s, which is:", $desc, $ref->desc_addr ),
+         map { "  $_" } @me;
+   }
+
+   return "not found" unless @ret;
+   return @ret;
+}
+
+=head2 $sv = $pmat->find_symbol( $name )
+
+Attempts to walk the symbol table looking for a symbol of the given name,
+which must include the sigil.
+
+ $Package::Name::symbol_name => to return a SCALAR SV
+ @Package::Name::symbol_name => to return an ARRAY SV
+ %Package::Name::symbol_name => to return a HASH SV
+ &Package::Name::symbol_name => to return a CODE SV
+
+=cut
+
+sub find_symbol
+{
+   my $self = shift;
+   my ( $name ) = @_;
+
+   my ( $sigil, $globname ) = $name =~ m/^([\$\@%&])(.*)$/ or
+      croak "Could not parse sigil from $name";
+
+   my $glob = $self->find_glob( $globname );
+
+   my $slot = ( $sigil eq '$' ) ? "scalar" :
+              ( $sigil eq '@' ) ? "array"  :
+              ( $sigil eq '%' ) ? "hash"   :
+              ( $sigil eq '&' ) ? "code"   :
+                                  die "ARGH"; # won't happen
+
+   my $sv = $glob->$slot or
+      croak "\*$globname has no $slot slot";
+   return $sv;
+}
+
+=head2 $gv = $pmat->find_glob( $name )
+
+Attempts to walk to the symbol table looking for a symbol of the given name,
+returning the C<GLOB> object if found.
+
+=cut
+
+sub find_glob
+{
+   my $self = shift;
+   my ( $name ) = @_;
+
+   my ( $parent, $shortname ) = $name =~ m/^(?:(.*)::)?(.+?)$/;
+
+   my $stash;
+   if( defined $parent and length $parent ) {
+      my $parentgv = $self->find_glob( $parent . "::" );
+      $stash = $parentgv->hash or croak "$parent has no hash";
+   }
+   else {
+      $stash = $self->dumpfile->defstash;
+   }
+
+   my $gv = $stash->value( $shortname ) or
+      croak $stash->stashname . " has no symbol $shortname";
+   return $gv;
 }
 
 =head1 AUTHOR

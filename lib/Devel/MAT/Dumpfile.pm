@@ -8,15 +8,13 @@ package Devel::MAT::Dumpfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.07';
+our $VERSION = '0.08';
 
 use Carp;
 use IO::Handle;   # ->read
 use IO::Seekable; # ->tell
 
 use Devel::MAT::SV;
-
-use List::Util qw( pairs );
 
 =head1 NAME
 
@@ -202,27 +200,6 @@ sub _fixup
          $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 1000) == 0;
    }
 
-   # Now fix up all the inrefs
-   $count = 0;
-   while( my ( undef, $sv ) = each %$heap ) {
-      foreach ( pairs $sv->outrefs ) {
-         my ( $name, $ref ) = @$_;
-         $ref->_push_inref_at( $sv->addr ) if !$ref->immortal;
-      }
-      $count++;
-      $progress->( sprintf "Patching refs in %d of %d (%.2f%%)",
-         $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 200) == 0
-   }
-
-   foreach (@ROOTS) {
-      my $root = $self->sv_at( $self->{"${_}_at"} );
-      $root->_push_inref_at( "the $_ root" ) if defined $root;
-   }
-   foreach my $addr ( @{ $self->{stack_at} } ) {
-      my $sv = $self->sv_at( $addr ) or next;
-      $sv->_push_inref_at( "a value on the stack" );
-   }
-
    return $self;
 }
 
@@ -239,37 +216,51 @@ sub _read
 sub _read_u8
 {
    my $self = shift;
-   return unpack "C", $self->_read(1);
+   $self->{fh}->read( my $buf, 1 ) or croak "Cannot read - $!";
+   return unpack "C", $buf;
 }
 
 sub _read_u32
 {
    my $self = shift;
-   return unpack $self->{u32_fmt}, $self->_read(4);
+   $self->{fh}->read( my $buf, 4 ) or croak "Cannot read - $!";
+   return unpack $self->{u32_fmt}, $buf;
 }
 
 sub _read_u64
 {
    my $self = shift;
-   return unpack $self->{u64_fmt}, $self->_read(8);
+   $self->{fh}->read( my $buf, 8 ) or croak "Cannot read - $!";
+   return unpack $self->{u64_fmt}, $buf;
 }
 
 sub _read_uint
 {
    my $self = shift;
-   return unpack $self->{uint_fmt}, $self->_read($self->{uint_len});
+   $self->{fh}->read( my $buf, $self->{uint_len} ) or croak "Cannot read - $!";
+   return unpack $self->{uint_fmt}, $buf;
 }
 
 sub _read_ptr
 {
    my $self = shift;
-   return unpack $self->{ptr_fmt}, $self->_read($self->{ptr_len});
+   $self->{fh}->read( my $buf, $self->{ptr_len} ) or croak "Cannot read - $!";
+   return unpack $self->{ptr_fmt}, $buf;
+}
+
+sub _read_ptrs
+{
+   my $self = shift;
+   my ( $n ) = @_;
+   $self->{fh}->read( my $buf, $self->{ptr_len} * $n ) or croak "Cannot read - $!";
+   return unpack "$self->{ptr_fmt}$n", $buf;
 }
 
 sub _read_nv
 {
    my $self = shift;
-   return unpack $self->{nv_fmt}, $self->_read($self->{nv_len});
+   $self->{fh}->read( my $buf, $self->{nv_len} ) or croak "Cannot read - $!";
+   return unpack $self->{nv_fmt}, $buf;
 }
 
 sub _read_str
@@ -290,9 +281,8 @@ sub _read_sv
 
       if( $type == 0x80 ) {
          # magic
-         my $sv_addr = $self->_read_ptr;
-         my $obj     = $self->_read_ptr;
-         my $type    = chr $self->_read_u8;
+         my ( $sv_addr, $obj ) = $self->_read_ptrs(2);
+         my $type              = chr $self->_read_u8;
 
          $self->sv_at( $sv_addr )->more_magic( $type => $obj );
          next;
@@ -466,125 +456,6 @@ sub sv_at
    return $self->{NO}    if $addr == $self->{no_at};
 
    return $self->{heap}{$addr};
-}
-
-=head2 @text = $df->identify( $sv )
-
-Traces the tree of inrefs from C<$sv> back towards the known roots, returning
-a textual description as a list of lines of text.
-
-The lines of text, when printed, will form a reverse reference tree, showing
-the paths from the given SV back to the roots.
-
-=cut
-
-sub identify
-{
-   my $self = shift;
-   my ( $sv, $seen ) = @_;
-   my $svaddr = $sv->addr;
-
-   return ( "undef" ) if $svaddr == $self->{undef_at};
-   return ( "true" )  if $svaddr == $self->{yes_at};
-   return ( "false" ) if $svaddr == $self->{no_at};
-
-   foreach my $root ( @ROOTS ) {
-      return $ROOTDESC{$root} if $svaddr == $self->{"${root}_at"};
-   }
-
-   $seen ||= { $sv->addr => 1 };
-
-   my @ret = ();
-   my %inrefs = $sv->inrefs;
-   foreach my $desc ( sort keys %inrefs ) {
-      my $ref = $inrefs{$desc};
-
-      if( !defined $ref ) {
-         push @ret, $desc; # e.g. "a value on the stack"
-         next;
-      }
-
-      my @me;
-      if( $ref == $sv ) {
-         @me = "itself";
-      }
-      elsif( $seen->{$ref->addr} ) {
-         @me = "already found";
-      }
-      else {
-         @me = $self->identify( $ref, $seen );
-      }
-
-      $seen->{$ref->addr}++;
-
-      push @ret,
-         sprintf( "%s of %s, which is:", $desc, $ref->desc_addr ),
-         map { "  $_" } @me;
-   }
-
-   return "not found" unless @ret;
-   return @ret;
-}
-
-=head2 $sv = $df->find_symbol( $name )
-
-Attempts to walk the symbol table looking for a symbol of the given name,
-which must include the sigil.
-
- $Package::Name::symbol_name => to return a SCALAR SV
- @Package::Name::symbol_name => to return an ARRAY SV
- %Package::Name::symbol_name => to return a HASH SV
- &Package::Name::symbol_name => to return a CODE SV
-
-=cut
-
-sub find_symbol
-{
-   my $self = shift;
-   my ( $name ) = @_;
-
-   my ( $sigil, $globname ) = $name =~ m/^([\$\@%&])(.*)$/ or
-      croak "Could not parse sigil from $name";
-
-   my $glob = $self->find_glob( $globname );
-
-   my $slot = ( $sigil eq '$' ) ? "scalar" :
-              ( $sigil eq '@' ) ? "array"  :
-              ( $sigil eq '%' ) ? "hash"   :
-              ( $sigil eq '&' ) ? "code"   :
-                                  die "ARGH"; # won't happen
-
-   my $sv = $glob->$slot or
-      croak "\*$globname has no $slot slot";
-   return $sv;
-}
-
-=head2 $gv = $df->find_glob( $name )
-
-Attempts to walk to the symbol table looking for a symbol of the given name,
-returning the C<GLOB> object if found.
-
-=cut
-
-sub find_glob
-{
-   my $self = shift;
-   my ( $name ) = @_;
-
-   my ( $parent, $shortname ) = $name =~ m/^(?:(.*)::)?(.+?)$/;
-
-   my $stash;
-   if( defined $parent and length $parent ) {
-      my $parentgv = $self->find_glob( $parent . "::" );
-      $stash = $parentgv->stash or croak "$parent has no stash";
-   }
-   else {
-      $stash = $self->defstash;
-   }
-
-   my $gv = $stash->value( $shortname ) or
-      croak $stash->stashname . " has no symbol $shortname";
-   return $gv;
 }
 
 =head1 AUTHOR

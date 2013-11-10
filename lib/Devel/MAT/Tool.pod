@@ -42,6 +42,22 @@ events to ensure the interface remains moderately responsive to user input.
 
 =back
 
+=head2 $tool->init_ui( $ui )
+
+Asks the tool to initialise any UI elements it may require, by calling methods
+on the given C<$ui>. This may be an object, or the package name
+C<Devel::MAT::UI> directly.
+
+=cut
+
+=head1 SVs
+
+Tools may, and are encouraged to where appropriate, add methods to the
+C<Devel::MAT::SV> package to access results of analysis or perform other
+related activities. All SVs are implemented as blessed HASH references, and
+tools may use keys beginning C<tool_...> in it. Key and method names should be
+namespaced appropriately according to the tool name, to avoid collisions.
+
 =cut
 
 =head1 AUTHOR

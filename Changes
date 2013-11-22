@@ -1,5 +1,15 @@
 Revision history for Devel-MAT
 
+0.09    2013/11/22 00:25:17
+        [CHANGES]
+         * Remove orphan count unit test as it is too unreliable
+
+        [BUGFIXES]
+         * Sometimes a PAD(0) slot is NULL
+         * ->identify is now a $pmat method
+         * ->identify should load Inrefs tool
+         * Try harder to clear PL_tmpsv when making an unreachable cycle
+
 0.08    2013/11/10 19:27:30
         [CHANGES]
          * Chase more fields of an HV's mro_meta

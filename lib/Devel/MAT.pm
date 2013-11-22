@@ -8,7 +8,7 @@ package Devel::MAT;
 use strict;
 use warnings;
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 use Carp;
 use List::Util qw( pairs );
@@ -106,12 +106,16 @@ a textual description as a list of lines of text.
 The lines of text, when printed, will form a reverse reference tree, showing
 the paths from the given SV back to the roots.
 
+This method will load L<Devel::MAT::Tool::Inrefs> if it isn't yet loaded.
+
 =cut
 
 sub identify
 {
    my $self = shift;
    my ( $sv, $seen ) = @_;
+
+   $self->load_tool( "Inrefs" );
 
    if( $sv->immortal ) {
       return ( "undef" ) if $sv->type eq "UNDEF";

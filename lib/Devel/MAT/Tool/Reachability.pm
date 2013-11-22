@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.08';
+our $VERSION = '0.09';
 
 use constant FOR_UI => 1;
 
@@ -207,7 +207,9 @@ sub mark_reachable
                   $pad->{tool_reachable} = REACH_PADLIST;
 
                   # PAD slot 0 is always @_
-                  $pad->elem( 0 )->{tool_reachable} = REACH_INTERNAL;
+                  if( my $argsav = $pad->elem( 0 ) ) {
+                     $argsav->{tool_reachable} = REACH_INTERNAL;
+                  }
 
                   foreach my $padix ( 1 .. $pad->elems-1 ) {
                      my $padname_sv = $padnames ? $padnames->elem( $padix ) : undef;

@@ -21,6 +21,10 @@ do {
    $av->[1] .= " a cycle";
    undef $av;
 };
+# It might still be in the temp SV; try to overwrite it
+my $tmp = [];
+$tmp->[0] = 0;
+undef $tmp;
 
 Devel::MAT::Dumper::dump( $DUMPFILE );
 END { unlink $DUMPFILE; }
@@ -51,7 +55,7 @@ SKIP: {
    ok( !$pv->reachable, "'This is a cycle' PV is not reachable" );
    if( $pv->reachable ) {
       diag( "PV is:" );
-      diag( $_ ) for $df->identify( $pv );
+      diag( $_ ) for $pmat->identify( $pv );
    }
 }
 

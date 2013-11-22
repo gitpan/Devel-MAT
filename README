@@ -31,6 +31,8 @@ METHODS
     The lines of text, when printed, will form a reverse reference tree,
     showing the paths from the given SV back to the roots.
 
+    This method will load Devel::MAT::Tool::Inrefs if it isn't yet loaded.
+
   $sv = $pmat->find_symbol( $name )
     Attempts to walk the symbol table looking for a symbol of the given
     name, which must include the sigil.

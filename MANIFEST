@@ -1,6 +1,7 @@
 bin/pmat-count
 bin/pmat-dump-symbols
 bin/pmat-explore-gtk
+bin/pmat-list-dangling-ptrs
 bin/pmat-list-orphans
 bin/pmat-show-sv
 Build.PL
@@ -22,7 +23,6 @@ MANIFEST			This list of files
 META.json
 META.yml
 README
-rebuild-all-tiny.sh
 share/icons/reachable-internal.svg
 share/icons/reachable-lexical.svg
 share/icons/reachable-none.svg
@@ -42,5 +42,4 @@ t/00use.t
 t/01self.t
 t/10tool-inrefs.t
 t/10tool-reachability.t
-t/90orphan-count.t
 t/99pod.t

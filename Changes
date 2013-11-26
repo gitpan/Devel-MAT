@@ -1,5 +1,20 @@
 Revision history for Devel-MAT
 
+0.10    2013/11/26 00:42:14
+        [CHANGES]
+         * Display dumped perl version, SV and byte counts in GTK explorer
+           status bar
+         * Dump all GVs, even those without GPs
+         * Store size information about all SVs
+            + TODO: CODE size does not take account of optree
+         * Have dump_at_{END,SIGABRT,SIGQUIT} print to STDERR
+         * Limit the capture size of PVs, but still note the full length
+         * Dump FILE and LINE of CVs and GVs
+         * Redrawn type icons
+
+        [BUGFIXES]
+         * Fix for NVLEN=16 architectures
+
 0.09    2013/11/22 00:25:17
         [CHANGES]
          * Remove orphan count unit test as it is too unreliable

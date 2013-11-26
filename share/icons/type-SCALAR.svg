@@ -10,8 +10,8 @@
    xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="16px"
-   height="16px"
+   width="20"
+   height="20"
    id="svg2985"
    version="1.1"
    inkscape:version="0.48.4 r9939"
@@ -48,7 +48,8 @@
        y1="1"
        x2="12.5"
        y2="15"
-       gradientUnits="userSpaceOnUse" />
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="matrix(0.95827704,0,0,1.001835,4.9690455,0.99082472)" />
     <linearGradient
        inkscape:collect="always"
        xlink:href="#linearGradient3775"
@@ -67,17 +68,18 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="22.197802"
-     inkscape:cx="10.398762"
-     inkscape:cy="9.0592288"
+     inkscape:cx="9.652045"
+     inkscape:cy="9.0204914"
      inkscape:current-layer="layer1"
      showgrid="true"
      inkscape:grid-bbox="true"
      inkscape:document-units="px"
-     inkscape:window-width="1235"
-     inkscape:window-height="699"
-     inkscape:window-x="15"
-     inkscape:window-y="37"
-     inkscape:window-maximized="0">
+     inkscape:window-width="934"
+     inkscape:window-height="682"
+     inkscape:window-x="1596"
+     inkscape:window-y="110"
+     inkscape:window-maximized="0"
+     inkscape:snap-grids="true">
     <inkscape:grid
        type="xygrid"
        id="grid2993"
@@ -103,25 +105,24 @@
   <g
      id="layer1"
      inkscape:label="Layer 1"
-     inkscape:groupmode="layer">
+     inkscape:groupmode="layer"
+     transform="translate(0,4)">
     <rect
-       style="fill:url(#linearGradient3771);fill-opacity:1;stroke:#008628;stroke-width:1;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       style="fill:url(#linearGradient3771);fill-opacity:1;stroke:#008628;stroke-width:0.97981405;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
        id="rect2995"
-       width="9"
-       height="9"
-       x="0.5"
-       y="0.5" />
-    <text
-       xml:space="preserve"
-       style="font-size:17.21779633px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
-       x="5.4138384"
-       y="14.222812"
-       id="text3821"
-       sodipodi:linespacing="125%"
-       transform="scale(1.0159151,0.98433423)"><tspan
-         sodipodi:role="line"
-         id="tspan3823"
-         x="5.4138384"
-         y="14.222812">$</tspan></text>
+       width="11.020185"
+       height="11.020185"
+       x="4.4899073"
+       y="0.48990703" />
+    <path
+       sodipodi:type="arc"
+       style="fill:#e6e6e6;stroke:#4d4d4d;stroke-width:1;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+       id="path2994"
+       sodipodi:cx="8.5"
+       sodipodi:cy="8"
+       sodipodi:rx="1.5"
+       sodipodi:ry="1.5"
+       d="M 10,8 A 1.5,1.5 0 1 1 7,8 1.5,1.5 0 1 1 10,8 z"
+       transform="translate(1.5,-2)" />
   </g>
 </svg>

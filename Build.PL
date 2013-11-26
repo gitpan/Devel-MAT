@@ -25,4 +25,8 @@ my $build = Module::Build->new(
    create_readme  => 1,
 );
 
+if( $build->args( "DEBUG" ) ) {
+   $build->extra_compiler_flags( @{ $build->extra_compiler_flags }, "-ggdb" );
+}
+
 $build->create_build_script;

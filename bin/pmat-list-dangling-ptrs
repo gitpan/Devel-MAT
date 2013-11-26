@@ -25,40 +25,35 @@ foreach ( keys %{ $df } ) {
    printf "DF has no SV at root %s addr 0x%x\n", $root, $addr;
 }
 
+sub test_ptr
+{
+   my ( $sv, $name, $val ) = @_;
+
+   given( ref $val ) {
+      when([ undef, '' ]) {
+         my $addr = $val or return;     # skip NULL
+         $roots{$addr} and return;      # known root
+         $df->{heap}{$addr} and return; # known heap SV
+
+         printf "SV %s has no %s SV at addr 0x%x\n", $sv->desc_addr, $name, $addr;
+      }
+      when( "ARRAY" ) {
+         foreach my $idx ( 0 .. $#$val ) {
+            test_ptr( $sv, "$name\[$idx]", $val->[$idx] );
+         }
+      }
+      when( "HASH" ) {
+         foreach my $key ( keys %$val ) {
+            test_ptr( $sv, "$name\{$key}", $val->{$key} );
+         }
+      }
+   }
+}
+
 foreach my $sv ( $df->heap ) {
    foreach ( keys %{ $sv } ) {
       next unless m/^(.*)_at$/;
       my $outref = $1;
-      my $val = $sv->{$_};
-      given( ref $val ) {
-         when( undef ) {
-            my $addr = $val;
-            $addr or next;
-            $roots{$addr} and next;
-            $df->{heap}{$addr} and next;
-
-            printf "SV %s has no %s SV at addr 0x%x\n", $sv->desc_addr, $outref, $addr;
-         }
-         when( "ARRAY" ) {
-            foreach my $idx ( 0 .. $#$val ) {
-               my $addr = $val->[$idx];
-               $addr or next;
-               $roots{$addr} and next;
-               $df->{heap}{$addr} and next;
-
-               printf "SV %s has no %s[%d] SV at addr 0x%x\n", $sv->desc_addr, $outref, $idx, $addr;
-            }
-         }
-         when( "HASH" ) {
-            foreach my $key ( keys %$val ) {
-               my $addr = $val->{$key};
-               $addr or next;
-               $roots{$addr} and next;
-               $df->{heap}{$addr} and next;
-
-               printf "SV %s has no %s{%s} SV at addr 0x%x\n", $sv->desc_addr, $outref, $key, $addr;
-            }
-         }
-      }
+      test_ptr( $sv, $outref, $sv->{$_} );
    }
 }

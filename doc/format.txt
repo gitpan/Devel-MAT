@@ -20,35 +20,57 @@ Roots:
   PTR     UNDEF         the "undef" immortal
   PTR     YES           the "yes" immortal
   PTR     NO            the "no" immortal
-  PTR     MAINCV        the main code
-  PTR     DEFSTASH      the default stash
-  PTR     MAINSTACK     the main stack AV
-  PTR     BEGINAV       the BEGIN list
-  PTR     CHECKAV       the CHECK list
-  PTR     UNITCHECKAV   the UNITCHECK list
-  PTR     INITAV        the INIT list
-  PTR     ENDAV         the END list
-  PTR     STRTAB        the shared string table HV
-  PTR     ENVGV         the ENV GV
-  PTR     INCGV         the INC GV
-  PTR     STATGV        the stat GV
-  PTR     STATNAME      the statname SV
-  PTR     TMPSV         the temporary SV
-  PTR     DEFGV         the default GV
-  PTR     ARGVGV        the ARGV GV
-  PTR     ARGOUTGV      the argvout GV
-  PTR     ARGVOUT_STACK the argout stack AV
-  PTR     FDPIDAV       the FD-to-PID mapping AV
-  PTR     PREAMBLEAV    the compiler preamble AV
-  PTR     MODGLOBALHV   the module data globals HV
-  PTR     REGEX_PADAV   the REGEXP pad AV
-  PTR     SORTSTASH     the sort stash
-  PTR     FIRSTGV       the *a GV
-  PTR     SECONDGV      the *b GV
-  PTR     DEBSTASH      the debugger stash
-  PTR     STASHCACHE    the stash cache
-  PTR     ISAREV        the reverse map of @ISA dependencies
-  PTR     MROS          the registered MROs HV
+
+  U32     NROOTS=$n
+  {STR    ROOTNAME
+   PTR    ROOT} * $n
+
+          main_cv         = the main code
+          defstash        = the default stash
+          mainstack       = the main stack AV
+          beginav         = the BEGIN list
+          checkav         = the CHECK list
+          unitcheckav     = the UNITCHECK list
+          initav          = the INIT list
+          endav           = the END list
+          strtab          = the shared string table HV
+          envgv           = the ENV GV
+          incgv           = the INC GV
+          statgv          = the stat GV
+          statname        = the statname SV
+          tmpsv           = the temporary SV
+          defgv           = the default GV
+          argvgv          = the ARGV GV
+          argoutgv        = the argvout GV
+          argvout_stack   = the argout stack AV
+          fdpidav         = the FD-to-PID mapping AV
+          preambleav      = the compiler preamble AV
+          modglobalhv     = the module data globals HV
+          regex_padav     = the REGEXP pad AV
+          sortstash       = the sort stash
+          firstgv         = the *a GV
+          secondgv        = the *b GV
+          debstash        = the debugger stash
+          stashcache      = the stash cache
+          isarev          = the reverse map of @ISA dependencies
+          registered_mros = the registered MROs HV
+          rs              = the IRS
+          last_in_gv      = the last input GV
+          ofsgv           = the OFS GV
+          defoutgv        = the default output GV
+          hintgv          = the hints (%^H) GV
+          patchlevel      = the patch level
+          apiversion      = the API version
+          e_script        = the '-e' script
+          mess_sv         = the message SV
+          ors_sv          = the ORS SV
+          encoding        = the encoding
+          blockhooks      = the block hooks
+          custom_ops      = the custom ops HV
+          custom_op_names = the custom op names HV
+          custom_op_descs = the custom op descriptions HV
+
+          # Plus miscellaneous other internal UTF-8 / text encoding support SVs
 
 Stack:
   UINT    SIZE = $n
@@ -63,6 +85,7 @@ An SV:
   PTR     ADDRESS
   U32     REFCNT
   PTR     BLESSED
+  UINT    SIZE
 
   type: SCALAR:
     U8      FLAGS  0x01 : has IV
@@ -73,11 +96,14 @@ An SV:
                    0x20 : RV is weak
     UINT?   IV
     double? NV
+    UINT?   PVLEN
     STR?    PV
     PTR     RV
 
   type: GLOB
     STR     NAME
+    STR     FILE
+    UINT    LINE
     PTR     STASH
     PTR     SCALAR
     PTR     ARRAY
@@ -98,17 +124,18 @@ An SV:
      PTR    VALUE}*$n
 
   type: STASH
+    [fields as hash, then]
     STR     NAME
     PTR     MRO_LINEAR_ALL
     PTR     MRO_LINEAR_CURRENT
     PTR     MRO_NEXTMETHOD
     PTR     MRO_ISA
-    [then fields as hash]
 
   type: CODE
     PTR     STASH
     PTR     GLOB
     STR     FILE
+    UINT    LINE
     PTR     OUTSIDE
     PTR     PADLIST
     PTR     CONSTVAL

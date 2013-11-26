@@ -15,6 +15,12 @@
 
 #define FORMAT_VERSION 0
 
+#ifndef SvOOK_offset
+#  define SvOOK_offset(sv, len) STMT_START { len = SvIVX(sv); } STMT_END
+#endif
+
+static int max_string;
+
 // These do NOT agree with perl's SVt_* constants!
 enum PMAT_SVt {
   PMAT_SVtGLOB = 1,
@@ -80,9 +86,10 @@ static void write_svptr(FILE *fh, const SV *ptr)
 static void write_nv(FILE *fh, NV v)
 {
 #if NVSIZE == 8
-  fwrite(&v, sizeof(double), 1, fh);
+  fwrite(&v, sizeof(NV), 1, fh);
 #else
-  fwrite(&v, sizeof(long double), 1, fh);
+  // long double is 10 bytes but sizeof() may be 16.
+  fwrite(&v, 10, 1, fh);
 #endif
 }
 
@@ -94,7 +101,10 @@ static void write_strn(FILE *fh, const char *s, size_t len)
 
 static void write_str(FILE *fh, const char *s)
 {
-  write_strn(fh, s, strlen(s));
+  if(s)
+    write_strn(fh, s, strlen(s));
+  else
+    write_uint(fh, -1);
 }
 
 static void dump_optree(FILE *fh, const CV *cv, OP *o);
@@ -135,21 +145,72 @@ static void dump_optree(FILE *fh, const CV *cv, OP *o)
   }
 }
 
+static void write_common_sv(FILE *fh, const SV *sv, size_t size)
+{
+  write_svptr(fh, sv);
+  write_u32(fh, SvREFCNT(sv));
+  write_svptr(fh, SvOBJECT(sv) ? (SV*)SvSTASH(sv) : NULL);
+  write_uint(fh, sizeof(SV) + size);
+}
+
 static void write_private_gv(FILE *fh, const GV *gv)
 {
-  write_str(fh, GvNAME(gv));
-  write_svptr(fh, (SV*)GvSTASH(gv));
-  write_svptr(fh,      GvSV(gv));
-  write_svptr(fh, (SV*)GvAV(gv));
-  write_svptr(fh, (SV*)GvHV(gv));
-  write_svptr(fh, (SV*)GvCV(gv));
-  write_svptr(fh, (SV*)GvEGV(gv));
-  write_svptr(fh, (SV*)GvIO(gv));
-  write_svptr(fh, (SV*)GvFORM(gv));
+  write_common_sv(fh, (const SV *)gv,
+    sizeof(XPVGV) + (isGV_with_GP(gv) ? sizeof(struct gp) : 0));
+
+  if(isGV_with_GP(gv)) {
+    write_str(fh, GvNAME(gv));
+    write_str(fh, GvFILE(gv));
+    write_uint(fh, GvLINE(gv));
+    write_svptr(fh, (SV*)GvSTASH(gv));
+    write_svptr(fh,      GvSV(gv));
+    write_svptr(fh, (SV*)GvAV(gv));
+    write_svptr(fh, (SV*)GvHV(gv));
+    write_svptr(fh, (SV*)GvCV(gv));
+    write_svptr(fh, (SV*)GvEGV(gv));
+    write_svptr(fh, (SV*)GvIO(gv));
+    write_svptr(fh, (SV*)GvFORM(gv));
+  }
+  else {
+    write_str(fh, NULL);
+    write_str(fh, NULL);
+    write_uint(fh, 0);
+    write_svptr(fh, (SV*)GvSTASH(gv));
+    write_svptr(fh, NULL);
+    write_svptr(fh, NULL);
+    write_svptr(fh, NULL);
+    write_svptr(fh, NULL);
+    write_svptr(fh, NULL);
+    write_svptr(fh, NULL);
+    write_svptr(fh, NULL);
+  }
 }
 
 static void write_private_sv(FILE *fh, const SV *sv)
 {
+  size_t size = 0;
+  switch(SvTYPE(sv)) {
+    case SVt_IV: break;
+    case SVt_NV:   size += sizeof(NV); break;
+#if (PERL_REVISION == 5) && (PERL_VERSION < 12)
+    case SVt_RV: break;
+#endif
+    case SVt_PV:   size += sizeof(XPV) - STRUCT_OFFSET(XPV, xpv_cur); break;
+    case SVt_PVIV: size += sizeof(XPVIV) - STRUCT_OFFSET(XPV, xpv_cur); break;
+    case SVt_PVNV: size += sizeof(XPVNV) - STRUCT_OFFSET(XPV, xpv_cur); break;
+    case SVt_PVMG: size += sizeof(XPVMG); break;
+  }
+
+  if(SvPOK(sv))
+    size += SvLEN(sv);
+  if(SvOOK(sv)) {
+    STRLEN offset;
+    SvOOK_offset(sv, offset);
+    size += offset;
+  }
+
+  write_common_sv(fh, sv, size);
+
   write_u8(fh, (SvIOK(sv) ? 0x01 : 0) |
                (SvUOK(sv) ? 0x02 : 0) |
                (SvNOK(sv) ? 0x04 : 0) |
@@ -160,8 +221,13 @@ static void write_private_sv(FILE *fh, const SV *sv)
     write_uint(fh, SvUVX(sv));
   if(SvNOK(sv))
     write_nv(fh, SvNVX(sv));
-  if(SvPOK(sv))
-    write_strn(fh, SvPVX(sv), SvCUR(sv));
+  if(SvPOK(sv)) {
+    write_uint(fh, SvCUR(sv));
+    STRLEN len = SvCUR(sv);
+    if(max_string > -1 && len > max_string)
+      len = max_string;
+    write_strn(fh, SvPVX(sv), len);
+  }
   if(SvROK(sv))
     write_svptr(fh, SvRV(sv));
 }
@@ -169,43 +235,73 @@ static void write_private_sv(FILE *fh, const SV *sv)
 static void write_private_av(FILE *fh, const AV *av)
 {
   int len = AvFILLp(av) + 1;
+
+  write_common_sv(fh, (const SV *)av,
+    sizeof(XPVAV) + sizeof(SV *) * len);
+
   write_uint(fh, len);
   int i;
   for(i = 0; i < len; i++)
     write_svptr(fh, AvARRAY(av)[i]);
 }
 
-static void write_private_hv(FILE *fh, const HV *hv)
+static void write_private_hv(FILE *fh, const HV *hv, size_t size)
 {
+  size += sizeof(XPVHV);
+  int nkeys = 0;
+
+  if(HvARRAY(hv)) {
+    int bucket;
+    for(bucket = 0; bucket <= HvMAX(hv); bucket++) {
+      HE *he;
+      size += sizeof(HE *);
+
+      for(he = HvARRAY(hv)[bucket]; he; he = he->hent_next) {
+        size += sizeof(HE);
+        nkeys++;
+
+        if(!HvSHAREKEYS(hv))
+          size += sizeof(HEK) + he->hent_hek->hek_len + 2;
+      }
+    }
+  }
+
+  write_common_sv(fh, (const SV *)hv, size);
+
   if(SvOOK(hv) && HvAUX(hv))
     write_svptr(fh, (SV*)HvAUX(hv)->xhv_backreferences);
   else
     write_svptr(fh, NULL);
 
-  if(hv_iterinit((HV *)hv)) {
-    HE *he;
-    int nkeys = 0;
-    while((he = hv_iternext((HV *)hv)))
-      nkeys++;
-
-    write_uint(fh, nkeys);
-
-    hv_iterinit((HV *)hv);
-    while((he = hv_iternext((HV *)hv))) {
-      STRLEN len;
-      char *key = HePV(he, len);
-      write_strn(fh, key, len);
-      write_svptr(fh, HeVAL(he));
-    }
-  }
-  else {
+  // The shared string table (PL_strtab) has shared strings as keys but its
+  // values are not SV pointers; they are refcounts.
+  if(hv == PL_strtab) {
     write_uint(fh, 0);
+    return;
+  }
+
+  write_uint(fh, nkeys);
+
+  if(HvARRAY(hv)) {
+    int bucket;
+    for(bucket = 0; bucket <= HvMAX(hv); bucket++) {
+      HE *he;
+      for(he = HvARRAY(hv)[bucket]; he; he = he->hent_next) {
+        STRLEN len;
+        char *key = HePV(he, len);
+        write_strn(fh, key, len);
+        write_svptr(fh, HeVAL(he));
+      }
+    }
   }
 }
 
 static void write_private_stash(FILE *fh, const HV *stash)
 {
   struct mro_meta *mro_meta = HvAUX(stash)->xhv_mro_meta;
+
+  write_private_hv(fh, stash,
+    sizeof(struct xpvhv_aux) + (mro_meta ? sizeof(struct mro_meta) : 0));
 
   write_str(fh, HvNAME(stash));
 
@@ -230,13 +326,14 @@ static void write_private_stash(FILE *fh, const HV *stash)
     write_svptr(fh, NULL);
     write_svptr(fh, NULL);
   }
-
-  write_private_hv(fh, stash);
 }
 
 static void write_private_cv(FILE *fh, const CV *cv)
 {
   PADLIST *padlist;
+
+  // TODO: accurate size information on CVs
+  write_common_sv(fh, (const SV *)cv, sizeof(XPVCV));
 
   write_svptr(fh, (SV*)CvSTASH(cv));
   write_svptr(fh, (SV*)CvGV(cv));
@@ -244,6 +341,15 @@ static void write_private_cv(FILE *fh, const CV *cv)
     write_str(fh, CvFILE(cv));
   else
     write_str(fh, "");
+
+  int line = 0;
+  OP *start;
+  if(!CvISXSUB(cv) && !CvCONST(cv) && (start = CvSTART(cv))) {
+    if(start->op_type == OP_NEXTSTATE)
+      line = CopLINE((COP*)start);
+  }
+  write_uint(fh, line);
+
   write_svptr(fh, (SV*)CvOUTSIDE(cv));
   write_svptr(fh, (SV*)(padlist = CvPADLIST(cv)));
   if(CvCONST(cv))
@@ -300,6 +406,8 @@ static void write_private_cv(FILE *fh, const CV *cv)
 
 static void write_private_io(FILE *fh, const IO *io)
 {
+  write_common_sv(fh, (const SV *)io, sizeof(XPVIO));
+
   write_svptr(fh, (SV*)IoTOP_GV(io));
   write_svptr(fh, (SV*)IoFMT_GV(io));
   write_svptr(fh, (SV*)IoBOTTOM_GV(io));
@@ -307,6 +415,8 @@ static void write_private_io(FILE *fh, const IO *io)
 
 static void write_private_lv(FILE *fh, const SV *sv)
 {
+  write_common_sv(fh, sv, sizeof(XPVLV));
+
   write_u8(fh, LvTYPE(sv));
   write_uint(fh, LvTARGOFF(sv));
   write_uint(fh, LvTARGLEN(sv));
@@ -347,25 +457,22 @@ static void write_sv(FILE *fh, const SV *sv)
   }
 
   write_u8(fh, type);
-  write_svptr(fh, sv);
-  write_u32(fh, SvREFCNT(sv));
-  write_svptr(fh, SvOBJECT(sv) ? (SV*)SvSTASH(sv) : NULL);
 
   switch(type) {
     case PMAT_SVtGLOB:   write_private_gv   (fh, (GV*)sv); break;
     case PMAT_SVtSCALAR: write_private_sv   (fh,      sv); break;
     case PMAT_SVtARRAY:  write_private_av   (fh, (AV*)sv); break;
-    case PMAT_SVtHASH:   write_private_hv   (fh, (HV*)sv); break;
+    case PMAT_SVtHASH:   write_private_hv   (fh, (HV*)sv, 0); break;
     case PMAT_SVtSTASH:  write_private_stash(fh, (HV*)sv); break;
     case PMAT_SVtCODE:   write_private_cv   (fh, (CV*)sv); break;
     case PMAT_SVtIO:     write_private_io   (fh, (IO*)sv); break;
     case PMAT_SVtLVALUE: write_private_lv   (fh,      sv); break;
 
-    case PMAT_SVtREGEXP:
-    case PMAT_SVtFORMAT:
-    case PMAT_SVtINVLIST:
-      // nothing special
-      break;
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 12)
+    case PMAT_SVtREGEXP: write_common_sv(fh, sv, sizeof(regexp)); break;
+#endif
+    case PMAT_SVtFORMAT: write_common_sv(fh, sv, sizeof(XPVFM)); break;
+    case PMAT_SVtINVLIST: write_common_sv(fh, sv, sizeof(XPV) + SvLEN(sv)); break;
   }
 
   if(SvMAGICAL(sv)) {
@@ -437,43 +544,105 @@ static void dumpfh(FILE *fh)
   write_svptr(fh, &PL_sv_undef);
   write_svptr(fh, &PL_sv_yes);
   write_svptr(fh, &PL_sv_no);
-  write_svptr(fh, (SV*)PL_main_cv);
-  write_svptr(fh, (SV*)PL_defstash);
-  write_svptr(fh, (SV*)PL_mainstack);
-  write_svptr(fh, (SV*)PL_beginav);
-  write_svptr(fh, (SV*)PL_checkav);
-  write_svptr(fh, (SV*)PL_unitcheckav);
-  write_svptr(fh, (SV*)PL_initav);
-  write_svptr(fh, (SV*)PL_endav);
-  write_svptr(fh, (SV*)PL_strtab);
-  write_svptr(fh, (SV*)PL_envgv);
-  write_svptr(fh, (SV*)PL_incgv);
-  write_svptr(fh, (SV*)PL_statgv);
-  write_svptr(fh, (SV*)PL_statname);
-  write_svptr(fh, (SV*)PL_Sv);
-  write_svptr(fh, (SV*)PL_defgv);
-  write_svptr(fh, (SV*)PL_argvgv);
-  write_svptr(fh, (SV*)PL_argvoutgv);
-  write_svptr(fh, (SV*)PL_argvout_stack);
-  write_svptr(fh, (SV*)PL_fdpid);
-  write_svptr(fh, (SV*)PL_preambleav);
-  write_svptr(fh, (SV*)PL_modglobal);
+
+  struct root { char *name; SV *ptr; } roots[] = {
+    { "main_cv",         (SV*)PL_main_cv },
+    { "defstash",        (SV*)PL_defstash },
+    { "mainstack",       (SV*)PL_mainstack },
+    { "beginav",         (SV*)PL_beginav },
+    { "checkav",         (SV*)PL_checkav },
+    { "unitcheckav",     (SV*)PL_unitcheckav },
+    { "initav",          (SV*)PL_initav },
+    { "endav",           (SV*)PL_endav },
+    { "strtab",          (SV*)PL_strtab },
+    { "envgv",           (SV*)PL_envgv },
+    { "incgv",           (SV*)PL_incgv },
+    { "statgv",          (SV*)PL_statgv },
+    { "statname",        (SV*)PL_statname },
+    { "tmpsv",           (SV*)PL_Sv }, // renamed
+    { "defgv",           (SV*)PL_defgv },
+    { "argvgv",          (SV*)PL_argvgv },
+    { "argvoutgv",       (SV*)PL_argvoutgv },
+    { "argvout_stack",   (SV*)PL_argvout_stack },
+    { "fdpid",           (SV*)PL_fdpid },
+    { "preambleav",      (SV*)PL_preambleav },
+    { "modglobalhv",     (SV*)PL_modglobal },
 #ifdef USE_ITHREADS
-  write_svptr(fh, (SV*)PL_regex_padav);
-#else
-  write_svptr(fh, NULL);
+    { "regex_padav",     (SV*)PL_regex_padav },
 #endif
-  write_svptr(fh, (SV*)PL_sortstash);
-  write_svptr(fh, (SV*)PL_firstgv);
-  write_svptr(fh, (SV*)PL_secondgv);
-  write_svptr(fh, (SV*)PL_debstash);
-  write_svptr(fh, (SV*)PL_stashcache);
-  write_svptr(fh, (SV*)PL_isarev);
+    { "sortstash",       (SV*)PL_sortstash },
+    { "firstgv",         (SV*)PL_firstgv },
+    { "secondgv",        (SV*)PL_secondgv },
+    { "debstash",        (SV*)PL_debstash },
+    { "stashcache",      (SV*)PL_stashcache },
+    { "isarev",          (SV*)PL_isarev },
 #if (PERL_REVISION == 5) && ((PERL_VERSION > 10) || (PERL_VERSION == 10 && PERL_SUBVERSION > 0))
-  write_svptr(fh, (SV*)PL_registered_mros);
-#else
-  write_svptr(fh, NULL);
+    { "registered_mros", (SV*)PL_registered_mros },
 #endif
+    { "rs",              (SV*)PL_rs },
+    { "last_in_gv",      (SV*)PL_last_in_gv },
+    { "defoutgv",        (SV*)PL_defoutgv },
+    { "hintgv",          (SV*)PL_hintgv },
+    { "patchlevel",      (SV*)PL_patchlevel },
+    { "e_script",        (SV*)PL_e_script },
+    { "mess_sv",         (SV*)PL_mess_sv },
+    { "ors_sv",          (SV*)PL_ors_sv },
+    { "encoding",        (SV*)PL_encoding },
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 12)
+    { "ofsgv",           (SV*)PL_ofsgv },
+#endif
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 14)
+    { "apiversion",      (SV*)PL_apiversion },
+    { "blockhooks",      (SV*)PL_blockhooks },
+#endif
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 16)
+    { "custom_ops",      (SV*)PL_custom_ops },
+    { "custom_op_names", (SV*)PL_custom_op_names },
+    { "custom_op_descs", (SV*)PL_custom_op_descs },
+#endif
+
+    // Unicode etc...
+    { "utf8_mark",              (SV*)PL_utf8_mark },
+    { "utf8_toupper",           (SV*)PL_utf8_toupper },
+    { "utf8_totitle",           (SV*)PL_utf8_totitle },
+    { "utf8_tolower",           (SV*)PL_utf8_tolower },
+    { "utf8_tofold",            (SV*)PL_utf8_tofold },
+    { "utf8_idstart",           (SV*)PL_utf8_idstart },
+    { "utf8_idcont",            (SV*)PL_utf8_idcont },
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 12)
+    { "utf8_X_extend",          (SV*)PL_utf8_X_extend },
+#endif
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 14)
+    { "utf8_xidstart",          (SV*)PL_utf8_xidstart },
+    { "utf8_xidcont",           (SV*)PL_utf8_xidcont },
+    { "utf8_foldclosures",      (SV*)PL_utf8_foldclosures },
+    { "utf8_foldable",          (SV*)PL_utf8_foldable },
+#endif
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 16)
+    { "Latin1",                 (SV*)PL_Latin1 },
+    { "AboveLatin1",            (SV*)PL_AboveLatin1 },
+    { "utf8_perl_idstart",      (SV*)PL_utf8_perl_idstart },
+#endif
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 18)
+    { "NonL1NonFinalFold",      (SV*)PL_NonL1NonFinalFold },
+    { "HasMultiCharFold",       (SV*)PL_HasMultiCharFold },
+    { "utf8_X_regular_begin",   (SV*)PL_utf8_X_regular_begin },
+    { "utf8_charname_begin",    (SV*)PL_utf8_charname_begin },
+    { "utf8_charname_continue", (SV*)PL_utf8_charname_continue },
+    { "utf8_perl_idcont",       (SV*)PL_utf8_perl_idcont },
+#endif
+#if (PERL_REVISION == 5) && ((PERL_VERSION > 19) || (PERL_VERSION == 19 && PERL_SUBVERSION >= 4))
+    { "UpperLatin1",            (SV*)PL_UpperLatin1 },
+#endif
+  };
+
+  write_u32(fh, sizeof(roots) / sizeof(roots[0]));
+
+  int i;
+  for(i = 0; i < sizeof(roots) / sizeof(roots[0]); i++) {
+    write_str(fh, roots[i].name);
+    write_svptr(fh, roots[i].ptr);
+  }
 
   // Stack
   write_uint(fh, PL_stack_sp - PL_stack_base + 1);
@@ -491,14 +660,8 @@ static void dumpfh(FILE *fh)
       switch(SvTYPE(sv)) {
         case 0:
         case 0xff:
-          continue; break;
-        case SVt_PVGV:
-          if(!isGV_with_GP(sv)) continue;
-          break;
+          continue;
       }
-
-      if(SvREFCNT(sv) == 0)
-        continue;
 
       write_sv(fh, sv);
     }
@@ -515,6 +678,8 @@ static void dump(char *file)
   FILE *fh = fopen(file, "wb+");
   if(!fh)
     croak("Cannot open %s for writing - %s", file, strerror(errno));
+
+  max_string = SvIV(get_sv("Devel::MAT::Dumper::MAX_STRING", GV_ADD));
 
   dumpfh(fh);
   fclose(fh);

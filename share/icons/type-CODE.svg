@@ -10,8 +10,8 @@
    xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="16px"
-   height="16px"
+   width="20"
+   height="20"
    id="svg2985"
    version="1.1"
    inkscape:version="0.48.4 r9939"
@@ -32,11 +32,11 @@
     <linearGradient
        id="linearGradient3765">
       <stop
-         style="stop-color:#ffd3c1;stop-opacity:1;"
+         style="stop-color:#ffdec1;stop-opacity:1;"
          offset="0"
          id="stop3767" />
       <stop
-         style="stop-color:#b43200;stop-opacity:1;"
+         style="stop-color:#b45500;stop-opacity:1;"
          offset="1"
          id="stop3769" />
     </linearGradient>
@@ -67,16 +67,16 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="31.392433"
-     inkscape:cx="8.3686881"
-     inkscape:cy="7.7894729"
+     inkscape:cx="7.9768301"
+     inkscape:cy="9.0636653"
      inkscape:current-layer="layer1"
      showgrid="true"
      inkscape:grid-bbox="true"
      inkscape:document-units="px"
-     inkscape:window-width="1235"
-     inkscape:window-height="699"
-     inkscape:window-x="15"
-     inkscape:window-y="37"
+     inkscape:window-width="1228"
+     inkscape:window-height="925"
+     inkscape:window-x="1366"
+     inkscape:window-y="42"
      inkscape:window-maximized="0">
     <inkscape:grid
        type="xygrid"
@@ -103,24 +103,38 @@
   <g
      id="layer1"
      inkscape:label="Layer 1"
-     inkscape:groupmode="layer">
-    <rect
-       style="fill:url(#linearGradient3771);fill-opacity:1;stroke:#862600;stroke-width:1;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"
+     inkscape:groupmode="layer"
+     transform="translate(0,4)">
+    <path
+       style="fill:url(#linearGradient3771);fill-opacity:1;stroke:#863f00;stroke-width:1;stroke-miterlimit:4;stroke-opacity:1"
+       d="m 2.5,-1.5 16,7.5 -16,7.5 z"
        id="rect2995"
-       width="9"
-       height="9"
-       x="0.5"
-       y="0.5" />
-    <text
-       xml:space="preserve"
-       style="font-size:15.53019524px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
-       x="4"
-       y="15"
-       id="text3821"
-       sodipodi:linespacing="125%"><tspan
-         sodipodi:role="line"
-         id="tspan3823"
-         x="4"
-         y="15">&amp;</tspan></text>
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cccc" />
+    <path
+       style="fill:none;stroke:#542800;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 4,7.5 4.5,0"
+       id="path7777"
+       inkscape:connector-curvature="0"
+       transform="translate(0,-4)" />
+    <path
+       style="fill:none;stroke:#542800;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 4,13.5 3.5,0"
+       id="path7779"
+       inkscape:connector-curvature="0"
+       transform="translate(0,-4)"
+       sodipodi:nodetypes="cc" />
+    <path
+       style="fill:none;stroke:#542800;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 4,9.5 7,0"
+       id="path7781"
+       inkscape:connector-curvature="0"
+       transform="translate(0,-4)" />
+    <path
+       style="fill:none;stroke:#542800;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m 4,11.5 6,0"
+       id="path7783"
+       inkscape:connector-curvature="0"
+       transform="translate(0,-4)" />
   </g>
 </svg>

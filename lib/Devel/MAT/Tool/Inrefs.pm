@@ -8,9 +8,22 @@ package Devel::MAT::Tool::Inrefs;
 use strict;
 use warnings;
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 use List::Util qw( pairmap pairs pairkeys pairvalues );
+
+=head1 NAME
+
+C<Devel::MAT::Tool::Inrefs> - annotate which SVs are referred to by others
+
+=head1 DESCRIPTION
+
+This C<Devel::MAT> tool annotates each SV with back-references from other SVs
+that refer to it. It follows the C<outrefs> method of every heap SV and
+annotates the referred SVs with back-references pointing back to the SVs that
+refer to them.
+
+=cut
 
 sub new
 {

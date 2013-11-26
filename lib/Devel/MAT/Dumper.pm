@@ -8,7 +8,7 @@ package Devel::MAT::Dumper;
 use strict;
 use warnings;
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 require XSLoader;
 XSLoader::load( __PACKAGE__, $VERSION );
@@ -72,13 +72,24 @@ F<$0.pmat> if not supplied.
 
  $ perl -MDevel::MAT::Dumper=-file,foo.pmat ...
 
+=head2 -max_string
+
+Sets the maximum length of string buffer to dump from PVs; defaults to 256 if
+not supplied. Use a negative size to dump the entire buffer of every PV
+regardless of size.
+
 =cut
+
+our $MAX_STRING = 256; # used by XS code
 
 my $dumpfile_name = "$0.pmat";
 
 my $dump_at_END;
 END {
-   Devel::MAT::Dumper::dump( $dumpfile_name ) if $dump_at_END;
+   return unless $dump_at_END;
+
+   print STDERR "Dumping to $dumpfile_name because of END\n";
+   Devel::MAT::Dumper::dump( $dumpfile_name );
 }
 
 sub import
@@ -93,6 +104,7 @@ sub import
       }
       elsif( $sym eq "-dump_at_SIGABRT" ) {
          $SIG{ABRT} = sub {
+            print STDERR "Dumping to $dumpfile_name because of SIGABRT\n";
             Devel::MAT::Dumper::dump( $dumpfile_name );
             undef $SIG{ABRT};
             kill ABRT => $$;
@@ -100,11 +112,15 @@ sub import
       }
       elsif( $sym eq "-dump_at_SIGQUIT" ) {
          $SIG{QUIT} = sub {
+            print STDERR "Dumping to $dumpfile_name because of SIGQUIT\n";
             Devel::MAT::Dumper::dump( $dumpfile_name );
          };
       }
       elsif( $sym eq "-file" ) {
          $dumpfile_name = shift;
+      }
+      elsif( $sym eq "-max_string" ) {
+         $MAX_STRING = shift;
       }
       else {
          die "Unrecognised $pkg import symbol $sym\n";

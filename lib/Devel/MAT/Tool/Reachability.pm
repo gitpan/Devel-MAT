@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.09';
+our $VERSION = '0.10';
 
 use constant FOR_UI => 1;
 
@@ -175,7 +175,7 @@ sub mark_reachable
 
    # Next the reachable user data, recursively
    {
-      my @queue = ( @user, $df->maincv );
+      my @queue = ( @user, $df->main_cv );
       my $count = 0;
       while( @queue ) {
          my $sv = shift @queue or next;

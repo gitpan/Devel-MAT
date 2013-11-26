@@ -21,9 +21,15 @@ my $pmat;
 my $df;
 
 my %ICONS;        # {$name} = $pixbuf
+my %TYPES_LARGE;  # {$type} = $pixbuf
 
-Devel::MAT::UI->register_icon( name => "type-$_", svg => "icons/type-$_.svg" ) for
-   qw( SCALAR ARRAY HASH CODE GLOB STASH REGEXP IO );
+foreach (qw( SCALAR ARRAY HASH CODE GLOB STASH REGEXP IO FORMAT )) {
+   Devel::MAT::UI->register_icon( name => "type-$_", svg => "icons/type-$_.svg" );
+
+   $TYPES_LARGE{$_} = Gtk2::Gdk::Pixbuf->new_from_file_at_size(
+      module_file( "Devel::MAT::UI", "icons/type-$_.svg" ), 40, 40
+   );
+}
 
 my $win = Gtk2::Window->new( "toplevel" );
 $win->signal_connect( destroy => sub { Gtk2->main_quit } );
@@ -159,6 +165,10 @@ $winbox->add( $pane );
 my $statusbar = Gtk2::Statusbar->new;
 $winbox->pack_end( $statusbar, FALSE, TRUE, 0 );
 
+$statusbar->pack_start( framed( my $perlver_label = Gtk2::Label->new( "" ) ), FALSE, FALSE, 0 );
+$statusbar->pack_start( framed( my $svcount_label = Gtk2::Label->new( "" ) ), FALSE, FALSE, 0 );
+$statusbar->pack_start( framed( my $bytetotal_label = Gtk2::Label->new( "" ) ), FALSE, FALSE, 0 );
+
 $win->show_all;
 
 {
@@ -177,6 +187,9 @@ $pmat = Devel::MAT->load(
 );
 $df = $pmat->dumpfile;
 
+$perlver_label->set_text( "Perl " . $df->perlversion );
+$svcount_label->set_text( scalar($df->heap) . " SVs" );
+
 # We're going to be using Inrefs
 $pmat->load_tool( "Inrefs", progress => \&progress );
 
@@ -189,6 +202,7 @@ my $svlist_model = Gtk2::ListStore->new(
    "Glib::String",
    "Glib::Int",
    "Glib::String",
+   "Glib::Int",
    "Glib::String",
    "Glib::Int",
    "Glib::Int",
@@ -229,30 +243,36 @@ $svlist_view->insert_column_with_data_func( -1, "Address",
 $svlist_view->get_column( $_ )->set_sort_column_id( $_ ) for 0 .. 1;
 
 add_svlist_column title => "Description", idx => 2;
-add_svlist_column title => "Blessed",     idx => 3;
-add_svlist_column title => "Outrefs",     idx => 4;
-add_svlist_column title => "Inrefs",      idx => 5;
+add_svlist_column title => "Size",        idx => 3;
+add_svlist_column title => "Blessed",     idx => 4;
+add_svlist_column title => "Outrefs",     idx => 5;
+add_svlist_column title => "Inrefs",      idx => 6;
 
 $pane->add1( vscrollable( $svlist_view ) );
 
 my $total = scalar $df->heap;
 my $count = 0;
+my $bytes = 0;
 foreach my $sv ( $df->heap ) {
    my $iter = $svlist_model->append;
    $svlist_model->set( $iter,
       0 => $sv->type,
       1 => $sv->addr,
       2 => $sv->desc,
-      3 => ( $sv->blessed ? $sv->blessed->stashname : "" ),
-      4 => scalar $sv->outrefs,
-      5 => scalar $sv->inrefs,
+      3 => $sv->size,
+      4 => ( $sv->blessed ? $sv->blessed->stashname : "" ),
+      5 => scalar $sv->outrefs,
+      6 => scalar $sv->inrefs,
    );
    $count++;
    progress( sprintf "Loading GTK TreeView %d of %d (%.2f%%)",
       $count, $total, $count*100 / $total ) if ($count % 1000) == 0;
+   $bytes += $sv->size;
 }
 
-my $table = Gtk2::Table->new( 1, 2 );
+$bytetotal_label->set_text( $bytes . " bytes" );
+
+my $table = Gtk2::Table->new( 1, 3 );
 $pane->add2( $table );
 
 $svlist_view->signal_connect( row_activated => sub {
@@ -271,15 +291,16 @@ Gtk2->main;
 
 sub table_add
 {
-   my ( $label, $widget, $yoptions ) = @_;
+   my ( $label, $widget, $yoptions, $right ) = @_;
 
    my $xoptions = [ "expand", "fill" ];
    $yoptions  //= [ "fill" ];
+   $right     //= 3;
 
    my ( $next_row ) = $table->get_size;
 
-   $table->attach( Gtk2::Label->new( $label ), 0, 1, $next_row, $next_row + 1, $xoptions, $yoptions, 0, 3 );
-   $table->attach( $widget,                    1, 2, $next_row, $next_row + 1, $xoptions, $yoptions, 0, 3 );
+   $table->attach( label( $label ), 0, 1,      $next_row, $next_row + 1, $xoptions, $yoptions, 0, 3 );
+   $table->attach( $widget,         1, $right, $next_row, $next_row + 1, $xoptions, $yoptions, 0, 3 );
 }
 
 my @more_details; # [] = { type, title, render }
@@ -289,37 +310,53 @@ sub display_sv
    my ( $sv ) = @_;
 
    $table->remove( $_ ) foreach $table->get_children;
+   $table->resize( 1, 1 );
 
    # Common things for all widget types;
-   table_add( "Address" => Gtk2::Label->new( sprintf "%#x", $sv->addr ) );
-
-   table_add( "SvREFCNT" => Gtk2::Label->new( $sv->refcnt ) );
-
    my $type = $sv->type;
-   table_add( "Type" => Gtk2::Label->new( $type ) );
+   table_add( "Type" => label( $type ), undef, 2 );
 
-   table_add( "Description" => Gtk2::Label->new( $sv->desc ) );
+   table_add( "Address" => label( sprintf "%#x", $sv->addr ), undef, 2 );
+
+   table_add( "SvREFCNT" => label( $sv->refcnt ), undef, 2 );
+
+   table_add( "Size" => label( $sv->size ), undef, 2 );
+
+   table_add( "Description" => label( $sv->desc ) );
+
+   $table->attach(
+      Gtk2::Image->new_from_pixbuf( $TYPES_LARGE{$type} ), 2, 3, 1, 5, [], [], 5, 5,
+   );
 
    if( my $stash = $sv->blessed ) {
-      table_add( "Blessed", Gtk2::Label->new( $stash->stashname ) );
+      table_add( "Blessed", label( $stash->stashname ) );
    }
 
    given( $type ) {
       when([ "GLOB", "CODE", "STASH" ]) {
-         table_add( "Stashname", Gtk2::Label->new( $sv->stashname ) ) if defined $sv->stashname;
+         table_add( "Stashname", label( $sv->stashname ) ) if defined $sv->stashname;
       }
       when( "SCALAR" ) {
-         table_add( "UV", Gtk2::Label->new( $sv->uv ) ) if defined $sv->uv;
-         table_add( "NV", Gtk2::Label->new( $sv->nv ) ) if defined $sv->nv;
-         table_add( "PV", Gtk2::Label->new( $sv->pv ) ) if defined $sv->pv;
-         table_add( "RV", Gtk2::Label->new( $sv->rv->desc . ( $sv->is_weak ? " weakly" : " strongly" ) ) )
+         table_add( "UV", label( $sv->uv ) ) if defined $sv->uv;
+         table_add( "NV", label( $sv->nv ) ) if defined $sv->nv;
+         table_add( "PV", hboxed(
+               label( $sv->pv . ( $sv->pvlen > length $sv->pv ? "..." : "" ) ),
+               label( $sv->pvlen . " bytes" )
+         ) ) if defined $sv->pv;
+         table_add( "RV", label( $sv->rv->desc . ( $sv->is_weak ? " weakly" : " strongly" ) ) )
             if defined $sv->rv;
       }
    }
 
    given( $type ) {
       when([ "SCALAR", "ARRAY", "HASH", "STASH", "CODE" ]) {
-         table_add( "Name", Gtk2::Label->new( $sv->name ) ) if defined $sv->name;
+         table_add( "Name", label( $sv->name ) ) if defined $sv->name;
+      }
+   }
+
+   given( $type ) {
+      when([ "GLOB", "CODE" ]) {
+         table_add( "Location", label( $sv->location ) );
       }
    }
 
@@ -329,7 +366,7 @@ sub display_sv
 
       my $widget;
       given( $extra->{type} ) {
-         when( "text" ) { $widget = Gtk2::Label->new( $data ) }
+         when( "text" ) { $widget = label( $data ) }
          when( "icon" ) { $widget = Gtk2::Image->new_from_pixbuf( $ICONS{$data} ) }
          default        { die "Unable to handle SV detail type $extra->{type}" }
       }
@@ -403,6 +440,31 @@ sub vscrollable
    $win->add( $widget );
 
    return $win;
+}
+
+sub framed
+{
+   my ( $widget ) = @_;
+   my $frame = Gtk2::Frame->new;
+   $frame->set_shadow_type( "in" );
+   $frame->add( $widget );
+   return $frame;
+}
+
+sub hboxed
+{
+   my %opts = ref $_[0] eq "HASH" ? %{+shift} : ();
+   my $hbox = Gtk2::HBox->new( $opts{homogenous} // 0, $opts{spacing} // 5 );
+   $hbox->pack_start( $_, $opts{expand} // 0, $opts{fill} // 0, $opts{padding} // 0 ) for @_;
+   return $hbox;
+}
+
+sub label
+{
+   my ( $text ) = @_;
+   my $l = Gtk2::Label->new( $text );
+   $l->set_alignment( 0, 0 );
+   return $l;
 }
 
 sub add_submenu

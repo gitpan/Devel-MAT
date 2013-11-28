@@ -1,3 +1,4 @@
+bin/pmat-callstack
 bin/pmat-count
 bin/pmat-dump-symbols
 bin/pmat-explore-gtk
@@ -8,6 +9,7 @@ Build.PL
 Changes
 doc/format.txt
 lib/Devel/MAT.pm
+lib/Devel/MAT/Context.pm
 lib/Devel/MAT/Dumper.pm
 lib/Devel/MAT/Dumper.xs
 lib/Devel/MAT/Dumpfile.pm
@@ -36,11 +38,14 @@ share/icons/type-FORMAT.svg
 share/icons/type-GLOB.svg
 share/icons/type-HASH.svg
 share/icons/type-IO.svg
+share/icons/type-LVALUE.svg
+share/icons/type-REF.svg
 share/icons/type-REGEXP.svg
 share/icons/type-SCALAR.svg
 share/icons/type-STASH.svg
 t/00use.t
 t/01self.t
+t/02contexts.t
 t/10tool-inrefs.t
 t/10tool-reachability.t
 t/99pod.t

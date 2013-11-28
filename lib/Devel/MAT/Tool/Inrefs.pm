@@ -8,7 +8,7 @@ package Devel::MAT::Tool::Inrefs;
 use strict;
 use warnings;
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 use List::Util qw( pairmap pairs pairkeys pairvalues );
 

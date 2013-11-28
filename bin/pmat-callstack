@@ -1,0 +1,61 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use feature qw( switch );
+no if $] >= 5.017011, warnings => 'experimental::smartmatch';
+
+use Devel::MAT;
+
+my $pmat = Devel::MAT->load( $ARGV[0] // die "Need dumpfile\n" );
+
+my $df = $pmat->dumpfile;
+
+sub stringify
+{
+   my ( $sv ) = @_;
+
+   if( $sv->type eq "SCALAR" ) {
+      if( defined $sv->pv ) {
+         my $str = substr $sv->pv, 0, 32;
+         $str =~ s/'/\\'/g;
+         return qq('$str') . ( $sv->pvlen > 32 ? "..." : "" );
+      }
+      else {
+         return $sv->nv // $sv->uv // "undef";
+      }
+   }
+   elsif( $sv->blessed ) {
+      return sprintf "%s=%s=(0x%x)", $sv->blessed->name, $sv->type, $sv->addr;
+   }
+   else {
+      return sprintf "%s=(0x%x)", $sv->type, $sv->addr;
+   }
+}
+
+foreach my $ctx ( $df->contexts ) {
+   print $ctx->location . ": ";
+
+   given( $ctx->type ) {
+      when( "SUB" ) {
+         my $cv = $ctx->cv;
+         if( my $args = $ctx->args ) {
+            my @args = $args->elems;
+            printf "%s(%s)", $cv->name, join( ", ", map { stringify( $_ ) } @args );
+         }
+         else {
+            print $cv->name;
+         }
+      }
+      when( "TRY" ) {
+         print "eval {...}";
+      }
+      when( "EVAL" ) {
+         my $code = substr $ctx->code->pv, 0, 32;
+         $code =~ s/\n.*//;
+         print 'eval ("' . $code . '"...)';
+      }
+   }
+
+   printf " => %s\n", $ctx->gimme;
+}

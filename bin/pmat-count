@@ -8,6 +8,7 @@ use Devel::MAT;
 my $pmat = Devel::MAT->load( $ARGV[0] // die "Need dumpfile\n" );
 
 my $df = $pmat->dumpfile;
+$pmat->available_tools; # load the files
 my $tool = $pmat->load_tool( "Count" );
 
 print "Perl memory dumpfile from perl ", $df->perlversion, "\n";

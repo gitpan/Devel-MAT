@@ -6,7 +6,11 @@ use feature qw( say );
 
 use Devel::MAT;
 
-my $df = Devel::MAT->load( $ARGV[0] // die "Need dumpfile\n" )->dumpfile;
+my $pmat = Devel::MAT->load( $ARGV[0] // die "Need dumpfile\n" );
+$pmat->available_tools;
+$pmat->load_tool( "Inrefs" );
+
+my $df = $pmat->dumpfile;
 
 my %orphans;
 foreach my $sv ( $df->heap ) {

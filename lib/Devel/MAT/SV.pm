@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -33,7 +33,7 @@ are documented below.
 # Lexical sub, so all inline subclasses can see it
 my $direct_or_rv = sub {
    my ( $name, $sv ) = @_;
-   if( defined $sv and $sv->desc eq "REF()" and !@{ $sv->{magic} } ) {
+   if( defined $sv and $sv->type eq "REF" and !@{ $sv->{magic} } ) {
       return ( "$name directly" => $sv,
                "$name via RV" => $sv->rv );
    }
@@ -52,31 +52,20 @@ sub register_type
    *{"$_[0]::type"} = sub () { $typename };
 }
 
-sub _new
+sub new
 {
-   my $class = shift;
-   my ( $df, $addr ) = @_;
+   shift;
+   my ( $type, $df, $header, $ptrs, $strs ) = @_;
 
-   my $self = bless { addr => $addr, magic => [] }, $class;
+   my $class = $types{$type} or croak "Cannot load unknown SV type $type";
+
+   my $self = bless { magic => [] }, $class;
    weaken( $self->{df} = $df );
-   return $self;
-}
 
-sub load
-{
-   my $class = shift;
-   my ( $type, $df ) = @_;
+   ( $self->{addr}, $self->{refcnt}, $self->{size} ) =
+      unpack "$df->{ptr_fmt} $df->{u32_fmt} $df->{uint_fmt}", $header;
 
-   $types{$type} or croak "Cannot load unknown SV type $type";
-
-   my $self = $types{$type}->_new( $df, $df->_read_ptr );
-
-   # Standard fields all SVs have
-   $self->{refcnt}     = $df->_read_u32;
-   $self->{blessed_at} = $df->_read_ptr;
-   $self->{size}       = $df->_read_uint;
-
-   $self->_load( $df );
+   ( $self->{blessed_at} ) = @$ptrs;
 
    return $self;
 }
@@ -240,24 +229,32 @@ boolean true and false. They are
 
 package Devel::MAT::SV::Immortal;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 use constant immortal => 1;
+sub new {
+   my $class = shift;
+   my ( $df, $addr ) = @_;
+   my $self = bless { addr => $addr }, $class;
+   Scalar::Util::weaken( $self->{df} = $df );
+   return $self;
+}
 sub _outrefs { () }
 
 package Devel::MAT::SV::UNDEF;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 sub desc { "UNDEF" }
 sub type { "UNDEF" }
 
 package Devel::MAT::SV::YES;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 sub desc { "YES" }
 sub type { "SCALAR" }
 
 # Pretend to be 1 / "1"
 sub uv { 1 }
+sub iv { 1 }
 sub nv { 1.0 }
 sub pv { "1" }
 sub rv { undef }
@@ -266,12 +263,13 @@ sub name {}
 
 package Devel::MAT::SV::NO;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 sub desc { "NO" }
 sub type { "SCALAR" }
 
 # Pretend to be 0 / ""
 sub uv { 0 }
+sub iv { 0 }
 sub nv { 0.0 }
 sub pv { "0" }
 sub rv { undef }
@@ -280,9 +278,8 @@ sub name {}
 
 package Devel::MAT::SV::Unknown;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 __PACKAGE__->register_type( 0xff );
-sub _load {}
 
 sub desc { "UNKNOWN" }
 
@@ -290,7 +287,7 @@ sub _outrefs {}
 
 package Devel::MAT::SV::GLOB;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 __PACKAGE__->register_type( 1 );
 
 =head1 Devel::MAT::SV::GLOB
@@ -299,17 +296,20 @@ Represents a glob; an SV of type C<SVt_PVGV>.
 
 =cut
 
-sub _load
+sub load
 {
    my $self = shift;
-   my ( $df ) = @_;
+   my ( $header, $ptrs, $strs ) = @_;
+   my $df = $self->{df};
 
-   $self->{name} = $df->_read_str;
-   $self->{file} = $df->_read_str;
-   $self->{line} = $df->_read_uint;
+   ( $self->{line} ) =
+      unpack "$df->{uint_fmt}", $header;
 
    @{$self}{qw( stash_at scalar_at array_at hash_at code_at egv_at io_at form_at )} =
-      $df->_read_ptrs(8);
+      @$ptrs;
+
+   @{$self}{qw( name file )} =
+      @$strs;
 }
 
 sub _fixup
@@ -374,7 +374,13 @@ sub egv    { my $self = shift; $self->{df}->sv_at( $self->{egv_at}    ) }
 sub io     { my $self = shift; $self->{df}->sv_at( $self->{io_at}     ) }
 sub form   { my $self = shift; $self->{df}->sv_at( $self->{form_at}   ) }
 
-sub stashname { my $self = shift; return $self->stash->stashname . "::" . $self->{name} }
+sub stashname
+{
+   my $self = shift;
+   my $name = $self->{name};
+   $name =~ s(^([\x00-\x1f])){"^" . chr(64 + ord $1)}e;
+   return $self->stash->stashname . "::" . $name;
+}
 
 sub desc
 {
@@ -407,41 +413,52 @@ sub _outrefs
 
 package Devel::MAT::SV::SCALAR;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 __PACKAGE__->register_type( 2 );
 
 =head1 Devel::MAT::SV::SCALAR
 
-Represents a scalar value; an SV of any of the types up to and including
-C<SVt_PVMV> (that is, C<IV>, C<NV>, C<PV>, C<PVIV>, C<PVNV> or C<PVMG>). This
-includes all numbers, integers and floats, strings, references, and dualvars
+Represents a non-referential scalar value; an SV of any of the types up to and
+including C<SVt_PVMV> (that is, C<IV>, C<NV>, C<PV>, C<PVIV>, C<PVNV> or
+C<PVMG>). This includes all numbers, integers and floats, strings, and dualvars
 containing multiple parts.
 
 =cut
 
-sub _load
+sub load
 {
    my $self = shift;
-   my ( $df ) = @_;
+   my ( $header, $ptrs, $strs ) = @_;
+   my $df = $self->{df};
 
-   my $flags = $df->_read_u8;
+   ( my $flags, $self->{uv}, my $nvbytes, $self->{pvlen} ) =
+      unpack "C $df->{uint_fmt} A$df->{nv_len} $df->{uint_fmt}", $header;
+   $self->{nv} = unpack "$df->{nv_fmt}", $nvbytes;
 
-   $self->{uv}    = $df->_read_uint if $flags & 0x01;
-   $self->{nv}    = $df->_read_nv   if $flags & 0x04;
-   $self->{pvlen} = $df->_read_uint if $flags & 0x08;
-   $self->{pv}    = $df->_read_str  if $flags & 0x08;
-   $self->{rv_at} = $df->_read_ptr  if $flags & 0x10;
+   ( $self->{pv} ) =
+      @$strs;
 
-   $self->{uv_is_iv}   = $flags & 0x02;
-   $self->{rv_is_weak} = $flags & 0x20;
+   # Body
+   undef $self->{uv} unless $flags & 0x01;
+   undef $self->{nv} unless $flags & 0x04;
+   undef $self->{pv} unless $flags & 0x08;
 
-   $flags &= ~0x3f;
+   if( $flags & 0x02 ) {
+      # UV is IV
+      $self->{iv} = unpack "j", pack "J", delete $self->{uv};
+   }
+
+   $flags &= ~0x0f;
    $flags and die sprintf "Unrecognised SCALAR flags %02x\n", $flags;
 }
 
 =head2 $uv = $sv->uv
 
-Returns the integer numeric portion, if valid, or C<undef>.
+Returns the integer numeric portion as an unsigned value, if valid, or C<undef>.
+
+=head2 $iv = $sv->iv
+
+Returns the integer numeric portion as a signed value, if valid, or C<undef>.
 
 =head2 $nv = $sv->nv
 
@@ -462,9 +479,96 @@ Returns the SV referred to by the reference portion, if valid, or C<undef>.
 =cut
 
 sub uv { my $self = shift; return $self->{uv} }
+sub iv { my $self = shift; return $self->{iv} }
 sub nv { my $self = shift; return $self->{nv} }
 sub pv    { my $self = shift; return $self->{pv} }
 sub pvlen { my $self = shift; return $self->{pvlen} }
+
+=head2 $str = $sv->qq_pv( $maxlen )
+
+Returns the PV string, if defined, suitably quoted. If C<$maxlen> is defined
+and the PV is longer than this, it is truncated and C<...> is appended after
+the containing quote marks.
+
+=cut
+
+sub qq_pv
+{
+   my $self = shift;
+   my ( $maxlen ) = @_;
+
+   defined( my $pv = $self->pv ) or return undef;
+   $pv = substr( $pv, 0, $maxlen ) if defined $maxlen and $maxlen < length $pv;
+
+   my $truncated = $self->pvlen > length $pv;
+
+   if( $pv =~ m/^[\x20-\x7e]*$/ ) {
+      $pv =~ s/(['\\])/\\$1/g;
+      $pv = qq('$pv');
+   }
+   else {
+      $pv =~ s((\")     | (\r)     | (\n)     | ([\x00-\x1f\x80-\xff]))
+              {$1?'\\"' : $2?"\\r" : $3?"\\n" : sprintf "\\x%02x", ord $4}egx;
+      $pv = qq("$pv");
+   }
+   $pv .= "..." if $truncated;
+
+   return $pv;
+}
+
+sub name
+{
+   my $self = shift;
+   return unless $self->{glob_at};
+   return '$' . $self->{df}->sv_at( $self->{glob_at} )->stashname;
+}
+
+sub desc
+{
+   my $self = shift;
+
+   my @flags;
+   push @flags, "UV" if defined $self->{uv};
+   push @flags, "IV" if defined $self->{iv};
+   push @flags, "NV" if defined $self->{nv};
+   push @flags, "PV" if defined $self->{pv};
+   local $" = ",";
+   return "SCALAR(@flags)";
+}
+
+sub _outrefs {}
+
+package Devel::MAT::SV::REF;
+use base qw( Devel::MAT::SV );
+our $VERSION = '0.11';
+__PACKAGE__->register_type( 3 );
+
+=head1 Devel::MAT::SV::REF
+
+Represents a referential scalar; any SCALAR-type SV with the C<SvROK> flag
+set.
+
+=cut
+
+sub load
+{
+   my $self = shift;
+   my ( $header, $ptrs, $strs ) = @_;
+   my $df = $self->{df};
+
+   ( my $flags ) =
+      unpack "C", $header;
+
+   # Body
+   ( $self->{rv_at} ) =
+      @$ptrs;
+
+   $self->{rv_is_weak} = $flags & 0x01;
+
+   $flags &= ~0x01;
+   $flags and die sprintf "Unrecognised REF flags %02x\n", $flags;
+}
+
 sub rv { my $self = shift; return $self->{rv_at} ? $self->{df}->sv_at( $self->{rv_at} ) : undef }
 
 =head2 $weak = $sv->is_weak
@@ -479,25 +583,14 @@ sub is_weak
    return $self->{rv_is_weak};
 }
 
-sub name
-{
-   my $self = shift;
-   return unless $self->{glob_at};
-   return '$' . $self->{df}->sv_at( $self->{glob_at} )->stashname;
-}
-
 sub desc
 {
    my $self = shift;
 
-   return sprintf "REF(%s)", $self->is_weak ? "W" : "" if $self->rv;
-
-   my $flags = "";
-   $flags .= "U" if exists $self->{uv};
-   $flags .= "N" if exists $self->{nv};
-   $flags .= "P" if exists $self->{pv};
-   return "SCALAR($flags)";
+   return sprintf "REF(%s)", $self->is_weak ? "W" : "";
 }
+
+*name = \&Devel::MAT::SV::SCALAR::name;
 
 sub _outrefs
 {
@@ -509,8 +602,8 @@ sub _outrefs
 
 package Devel::MAT::SV::ARRAY;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
-__PACKAGE__->register_type( 3 );
+our $VERSION = '0.11';
+__PACKAGE__->register_type( 4 );
 
 =head1 Devel::MAT::SV::ARRAY
 
@@ -518,12 +611,16 @@ Represents an array; an SV of type C<SVt_PVAV>.
 
 =cut
 
-sub _load
+sub load
 {
    my $self = shift;
-   my ( $df ) = @_;
+   my ( $header, $ptrs, $strs ) = @_;
+   my $df = $self->{df};
 
-   my $n = $df->_read_uint;
+   ( my $n ) =
+      unpack "$df->{uint_fmt}", $header;
+
+   # Body
    $self->{elems_at} = [ $n ? $df->_read_ptrs($n) : () ];
 }
 
@@ -575,8 +672,8 @@ sub _outrefs
 
 package Devel::MAT::SV::HASH;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
-__PACKAGE__->register_type( 4 );
+our $VERSION = '0.11';
+__PACKAGE__->register_type( 5 );
 
 =head1 Devel::MAT::SV::HASH
 
@@ -585,14 +682,18 @@ subclass is used to represent hashes that are used as stashes.
 
 =cut
 
-sub _load
+sub load
 {
    my $self = shift;
-   my ( $df ) = @_;
+   my ( $header, $ptrs, $strs ) = @_;
+   my $df = $self->{df};
 
-   $self->{backrefs_at} = $df->_read_ptr;
+   ( my $n ) =
+      unpack "$df->{uint_fmt} a*", $header;
 
-   my $n = $df->_read_uint;
+   ( $self->{backrefs_at} ) =
+      @$ptrs;
+
    foreach ( 1 .. $n ) {
       my $key = $df->_read_str;
       $self->{values_at}{$key} = $df->_read_ptr;
@@ -677,8 +778,8 @@ sub _outrefs
 
 package Devel::MAT::SV::STASH;
 use base qw( Devel::MAT::SV::HASH );
-our $VERSION = '0.10';
-__PACKAGE__->register_type( 5 );
+our $VERSION = '0.11';
+__PACKAGE__->register_type( 6 );
 
 =head1 Devel::MAT::SV::STASH
 
@@ -687,18 +788,43 @@ is non-NULL. This is a subclass of C<Devel::MAT::SV::HASH>.
 
 =cut
 
-sub _load
+sub load
 {
    my $self = shift;
-   my ( $df ) = @_;
+   my ( $header, $ptrs, $strs ) = @_;
+   my $df = $self->{df};
 
-   $self->SUPER::_load( @_ );
+   my ( $hash_bytes, $hash_ptrs, $hash_strs ) = @{ $df->{sv_sizes}[5] };
 
-   $self->{name} = $df->_read_str;
+   $self->SUPER::load(
+      substr( $header, 0, $hash_bytes, "" ),
+      [ splice @$ptrs, 0, $hash_ptrs ],
+      [ splice @$strs, 0, $hash_strs ],
+   );
 
    @{$self}{qw( mro_linearall_at mro_linearcurrent_at mro_nextmethod_at mro_isa_at )} =
-      $df->_read_ptrs(4);
+      @$ptrs;
+
+   ( $self->{name} ) =
+      @$strs;
 }
+
+=head2 $hv = $stash->mro_linear_all
+
+=head2 $sv = $stash->mro_linearcurrent
+
+=head2 $sv = $stash->mro_nextmethod
+
+=head2 $av = $stash->mro_isa
+
+Returns the fields from the MRO structure
+
+=cut
+
+sub mro_linearall     { my $self = shift; return $self->{df}->sv_at( $self->{mro_linearall_at} ) }
+sub mro_linearcurrent { my $self = shift; return $self->{df}->sv_at( $self->{mro_linearcurrent_at} ) }
+sub mro_nextmethod    { my $self = shift; return $self->{df}->sv_at( $self->{mro_nextmethod_at} ) }
+sub mro_isa           { my $self = shift; return $self->{df}->sv_at( $self->{mro_isa_at} ) }
 
 =head2 $name = $stash->stashname
 
@@ -723,18 +849,17 @@ sub desc
 sub _outrefs
 {
    my $self = shift;
-   my $df = $self->{df};
    return $self->SUPER::_outrefs,
-      "the mro linear all HV"  => $df->sv_at( $self->{mro_linearall_at} ),
-      "the mro linear current" => $df->sv_at( $self->{mro_linearcurrent_at} ),
-      "the mro next::method"   => $df->sv_at( $self->{mro_nextmethod_at} ),
-      "the mro ISA cache"      => $df->sv_at( $self->{mro_isa_at} );
+      "the mro linear all HV"  => $self->mro_linearall,
+      "the mro linear current" => $self->mro_linearcurrent,
+      "the mro next::method"   => $self->mro_nextmethod,
+      "the mro ISA cache"      => $self->mro_isa,
 }
 
 package Devel::MAT::SV::CODE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
-__PACKAGE__->register_type( 6 );
+our $VERSION = '0.11';
+__PACKAGE__->register_type( 7 );
 
 use List::Util qw( pairmap );
 
@@ -744,17 +869,20 @@ Represents a function or closure; an SV of type C<SVt_PVCV>.
 
 =cut
 
-sub _load
+sub load
 {
    my $self = shift;
-   my ( $df ) = @_;
+   my ( $header, $ptrs, $strs ) = @_;
+   my $df = $self->{df};
 
-   @{$self}{qw( stash_at glob_at )} = $df->_read_ptrs(2);
+   ( $self->{line}, $self->{flags}, $self->{oproot} ) =
+      unpack "$df->{uint_fmt} C $df->{ptr_fmt}", $header;
 
-   $self->{file} = $df->_read_str;
-   $self->{line} = $df->_read_uint;
+   @{$self}{qw( stash_at glob_at outside_at padlist_at constval_at )} =
+      @$ptrs;
 
-   @{$self}{qw( outside_at padlist_at constval_at )} = $df->_read_ptrs(3);
+   ( $self->{file} ) = 
+      @$strs;
 
    $self->{consts_at} = \my @consts;
    $self->{constix}   = \my @constix;
@@ -861,8 +989,10 @@ sub _fixup
 
 =head2 $sv = $cv->constval
 
-Returns the stash, glob, filename, scope, padlist, padnames or constant value
-of the code.
+=head2 $addr = $cv->oproot
+
+Returns the stash, glob, filename, line number, scope, padlist, constant value
+or oproot of the code.
 
 =cut
 
@@ -873,6 +1003,7 @@ sub line     { my $self = shift; return $self->{line} }
 sub scope    { my $self = shift; return $self->{df}->sv_at( $self->{outside_at} ) }
 sub padlist  { my $self = shift; return $self->{df}->sv_at( $self->{padlist_at} ) }
 sub constval { my $self = shift; return $self->{df}->sv_at( $self->{constval_at} ) }
+sub oproot   { my $self = shift; return $self->{oproot} }
 
 =head2 $location = $cv->location
 
@@ -887,6 +1018,34 @@ sub location
    $self->{line} ? "$self->{file} line $self->{line}"
                  : $self->{file};
 }
+
+=head2 $clone = $cv->is_clone
+
+=head2 $cloned = $cv->is_cloned
+
+=head2 $xsub = $cv->is_xsub
+
+Returns the C<CvCLONE()>, C<CvCLONED()> and C<CvISXSUB()> flags.
+
+=cut
+
+sub is_clone  { my $self = shift; ( $self->{flags} // 0 ) & 0x01 }
+sub is_cloned { my $self = shift; ( $self->{flags} // 0 ) & 0x02 }
+sub is_xsub   { my $self = shift; ( $self->{flags} // 0 ) & 0x04 }
+
+=head2 $protosub = $cv->protosub
+
+Returns the protosub CV, if known, for a closure CV.
+
+=cut
+
+sub _set_protosub
+{
+   my $self = shift;
+   ( $self->{protosub_at} ) = @_;
+}
+
+sub protosub { my $self = shift; return $self->{df}->sv_at( $self->{protosub_at} ); }
 
 =head2 @svs = $cv->constants
 
@@ -1041,8 +1200,17 @@ sub lexvars
 sub desc
 {
    my $self = shift;
-   return "CODE(stash)" if $self->stash;
-   return "CODE()";
+
+   my @flags;
+   push @flags, "PP"    if $self->oproot;
+   push @flags, "CONST" if $self->constval;
+   push @flags, "XS"    if $self->is_xsub;
+
+   push @flags, "C" if $self->is_cloned; # C for Closure
+   push @flags, "P" if $self->is_clone;  # P for Protosub
+
+   local $" = ",";
+   return "CODE(@flags)";
 }
 
 sub _outrefs
@@ -1063,6 +1231,7 @@ sub _outrefs
                                          : () } $self->{padnames_av}->elems :
          () ),
       "the constant value" => $self->constval,
+      "the protosub" => $self->protosub,
       ( map { +"a constant" => $_ } $self->constants ),
       ( map { +"a referenced glob" => $_ } $self->globrefs ),
       ( map {
@@ -1085,15 +1254,16 @@ sub _outrefs
 
 package Devel::MAT::SV::IO;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
-__PACKAGE__->register_type( 7 );
+our $VERSION = '0.11';
+__PACKAGE__->register_type( 8 );
 
-sub _load
+sub load
 {
    my $self = shift;
-   my ( $df ) = @_;
+   my ( $header, $ptrs, $strs ) = @_;
 
-   @{$self}{qw( topgv_at formatgv_at bottomgv_at )} = $df->_read_ptrs(3);
+   @{$self}{qw( topgv_at formatgv_at bottomgv_at )} =
+      @$ptrs;
 }
 
 sub topgv    { my $self = shift; $self->{df}->sv_at( $self->{topgv_at}    ) }
@@ -1114,18 +1284,20 @@ sub _outrefs
 
 package Devel::MAT::SV::LVALUE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
-__PACKAGE__->register_type( 8 );
+our $VERSION = '0.11';
+__PACKAGE__->register_type( 9 );
 
-sub _load
+sub load
 {
    my $self = shift;
-   my ( $df ) = @_;
+   my ( $header, $ptrs, $strs ) = @_;
+   my $df = $self->{df};
 
-   $self->{type} = chr $df->_read_u8;
-   $self->{off}  = $df->_read_uint;
-   $self->{len}  = $df->_read_uint;
-   $self->{targ_at} = $df->_read_ptr;
+   ( $self->{type}, $self->{off}, $self->{len} ) =
+      unpack "a1 $df->{uint_fmt}2", $header;
+
+   ( $self->{targ_at} ) =
+      @$ptrs;
 }
 
 sub lvtype { my $self = shift; return $self->{type} }
@@ -1145,10 +1317,10 @@ sub _outrefs
 
 package Devel::MAT::SV::REGEXP;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
-__PACKAGE__->register_type( 9 );
+our $VERSION = '0.11';
+__PACKAGE__->register_type( 10 );
 
-sub _load {}
+sub load {}
 
 sub desc { "REGEXP()" }
 
@@ -1156,10 +1328,10 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::FORMAT;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
-__PACKAGE__->register_type( 10 );
+our $VERSION = '0.11';
+__PACKAGE__->register_type( 11 );
 
-sub _load {}
+sub load {}
 
 sub desc { "FORMAT()" }
 
@@ -1167,10 +1339,10 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::INVLIST;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.10';
-__PACKAGE__->register_type( 11 );
+our $VERSION = '0.11';
+__PACKAGE__->register_type( 12 );
 
-sub _load {}
+sub load {}
 
 sub desc { "INVLIST()" }
 

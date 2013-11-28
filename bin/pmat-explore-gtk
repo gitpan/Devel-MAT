@@ -23,7 +23,7 @@ my $df;
 my %ICONS;        # {$name} = $pixbuf
 my %TYPES_LARGE;  # {$type} = $pixbuf
 
-foreach (qw( SCALAR ARRAY HASH CODE GLOB STASH REGEXP IO FORMAT )) {
+foreach (qw( SCALAR REF ARRAY HASH CODE GLOB STASH LVALUE REGEXP IO FORMAT )) {
    Devel::MAT::UI->register_icon( name => "type-$_", svg => "icons/type-$_.svg" );
 
    $TYPES_LARGE{$_} = Gtk2::Gdk::Pixbuf->new_from_file_at_size(
@@ -336,20 +336,33 @@ sub display_sv
       when([ "GLOB", "CODE", "STASH" ]) {
          table_add( "Stashname", label( $sv->stashname ) ) if defined $sv->stashname;
       }
+   }
+
+   given( $type ) {
+      when( "CODE" ) {
+         table_add( "Flags", label( join( " ",
+                  ( $sv->is_clone  ? "CLONE"  : () ),
+                  ( $sv->is_cloned ? "CLONED" : () ),
+                  ( $sv->is_xsub   ? "XSUB"   : () ) ) ) );
+         table_add( "Oproot", label( sprintf "%x (%d)", $sv->oproot, $sv->oproot ) ) if $sv->oproot;
+      }
       when( "SCALAR" ) {
          table_add( "UV", label( $sv->uv ) ) if defined $sv->uv;
+         table_add( "IV", label( $sv->iv ) ) if defined $sv->iv;
          table_add( "NV", label( $sv->nv ) ) if defined $sv->nv;
-         table_add( "PV", hboxed(
-               label( $sv->pv . ( $sv->pvlen > length $sv->pv ? "..." : "" ) ),
-               label( $sv->pvlen . " bytes" )
-         ) ) if defined $sv->pv;
+         if( defined $sv->pv ) {
+            table_add( "PV len", label( $sv->pvlen ) );
+            table_add( "PV",     label( $sv->qq_pv( 32 ) ) );
+         }
+      }
+      when( "REF" ) {
          table_add( "RV", label( $sv->rv->desc . ( $sv->is_weak ? " weakly" : " strongly" ) ) )
             if defined $sv->rv;
       }
    }
 
    given( $type ) {
-      when([ "SCALAR", "ARRAY", "HASH", "STASH", "CODE" ]) {
+      when([ "SCALAR", "REF", "ARRAY", "HASH", "STASH", "CODE" ]) {
          table_add( "Name", label( $sv->name ) ) if defined $sv->name;
       }
    }
@@ -449,14 +462,6 @@ sub framed
    $frame->set_shadow_type( "in" );
    $frame->add( $widget );
    return $frame;
-}
-
-sub hboxed
-{
-   my %opts = ref $_[0] eq "HASH" ? %{+shift} : ();
-   my $hbox = Gtk2::HBox->new( $opts{homogenous} // 0, $opts{spacing} // 5 );
-   $hbox->pack_start( $_, $opts{expand} // 0, $opts{fill} // 0, $opts{padding} // 0 ) for @_;
-   return $hbox;
 }
 
 sub label

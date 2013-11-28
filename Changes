@@ -1,5 +1,21 @@
 Revision history for Devel-MAT
 
+0.11    2013/11/28 14:30:32
+        [CHANGES]
+         * Complete redesign of dumpfile format so it is more extensible in future
+         * Represent RVs by their own type, REF, rather than being a kind of SCALAR
+         * Store caller()-like context in dumpfiles as well
+         * Store CLONE/CLONED/ISXSUB CV flags and oproot
+         * Attempt to match CLONE protosubs with CLONED closures
+         * Added SCALAR->iv method
+         * Neaten the names of STASHes whose names begin with a control character
+         * Pretty-print PVs and limit length to 32 characters in GTK explorer
+         * Added icons for REF and LVALUE types
+
+        [BUGFIXES]
+         * Guard against PL_main_root being NULL, as it can be early in compilation
+         * Improved Reachability tool logic for CODE PAD slots
+
 0.10    2013/11/26 00:42:14
         [CHANGES]
          * Display dumped perl version, SV and byte counts in GTK explorer

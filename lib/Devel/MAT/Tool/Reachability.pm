@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 use constant FOR_UI => 1;
 
@@ -165,7 +165,11 @@ sub mark_reachable
          }
 
          push @internal,
-            $stash->backrefs;
+            $stash->backrefs,
+            $stash->mro_linearall,
+            $stash->mro_linearcurrent,
+            $stash->mro_nextmethod,
+            $stash->mro_isa,
             grep { defined } pairvalues $stash->magic;
 
          $count++;
@@ -183,7 +187,7 @@ sub mark_reachable
 
          my @more;
          given( $sv->type ) {
-            when( "SCALAR" ) { push @more, $sv->rv if $sv->rv }
+            when( "REF" )    { push @more, $sv->rv if $sv->rv }
             when( "ARRAY" )  { push @more, $sv->elems; }
             when( "HASH" )   { push @more, $sv->values; }
             when( "GLOB" ) {
@@ -219,15 +223,17 @@ sub mark_reachable
                      my $sv = $pad->elem( $padix ) or next;
                      $sv->immortal and next;
 
-                     if( $padname and $padname ne "&" ) {
-                        # Named slots are lexical vars, but pad name "&" is used
-                        # for closure prototype subs.
+                     if( $padname and $padname eq "&" ) {
+                        # Slots named "&" are closure prototype subs
+                        push @more, $sv;
+                     }
+                     elsif( $padname ) {
+                        # Other named slots are lexical vars
                         $sv->{tool_reachable} = REACH_LEXICAL;
                         push @queue, $sv;
                      }
                      else {
                         # Unnamed slots are just part of the padlist
-                        $sv->{tool_reachable} = REACH_INTERNAL;
                         push @internal, $sv;
                      }
                   }
@@ -241,7 +247,7 @@ sub mark_reachable
 
                push @internal, $lv->target if $lv->target;
             }
-            when([ "IO", "REGEXP", "FORMAT" ]) { } # ignore
+            when([ "SCALAR", "IO", "REGEXP", "FORMAT" ]) { } # ignore
 
             default { warn "Not sure what to do with user data item ".$sv->desc_addr."\n"; }
          }
@@ -265,7 +271,7 @@ sub mark_reachable
 
          $sv->{tool_reachable} = REACH_INTERNAL;
 
-         push @queue, grep { defined } pairvalues $sv->_outrefs;
+         push @queue, grep { defined } pairvalues $sv->outrefs;
 
          $count++;
          $progress->( sprintf "Marking internal reachability %d...", $count ) if $progress and $count % 1000 == 0;

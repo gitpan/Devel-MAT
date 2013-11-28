@@ -8,13 +8,14 @@ package Devel::MAT::Dumpfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 use Carp;
 use IO::Handle;   # ->read
 use IO::Seekable; # ->tell
 
 use Devel::MAT::SV;
+use Devel::MAT::Context;
 
 =head1 NAME
 
@@ -171,11 +172,15 @@ sub load
 
    $self->{perlver} = $self->_read_u32;
 
+   my $n_types = $self->_read_u8;
+   my @sv_sizes = unpack "(a3)*", my $tmp = $self->_read( $n_types * 3 );
+   $self->{sv_sizes} = [ map [ unpack "C C C", $_ ], @sv_sizes ];
+
    # Roots
    foreach (qw( undef yes no )) {
       my $addr = $self->{"${_}_at"} = $self->_read_ptr;
       my $class = "Devel::MAT::SV::\U$_";
-      $self->{uc $_} = $class->_new( $self, $addr );
+      $self->{uc $_} = $class->new( $self, $addr );
    }
 
    foreach ( 1 .. $self->_read_u32 ) {
@@ -187,6 +192,7 @@ sub load
    my $stacksize = $self->_read_uint;
    $self->{stack_at} = [ map { $self->_read_ptr } 1 .. $stacksize ];
 
+   # Heap
    $self->{heap} = \my %heap;
    while( my $sv = $self->_read_sv ) {
       $heap{$sv->addr} = $sv;
@@ -194,6 +200,12 @@ sub load
       my $pos = $fh->IO::Seekable::tell; # fully-qualified method for 5.010
       $progress->( sprintf "Loading file %d of %d (%.2f%%)",
          $pos, $filelen, 100*$pos / $filelen ) if $progress and (keys(%heap) % 1000) == 0;
+   }
+
+   # Contexts
+   $self->{contexts} = \my @contexts;
+   while( my $ctx = $self->_read_ctx ) {
+      push @contexts, $ctx;
    }
 
    $self->_fixup( %args ) unless $args{no_fixup};
@@ -212,14 +224,39 @@ sub _fixup
 
    my $heap_total = scalar keys %$heap;
 
-   # While dumping we weren't able to determine what ARRAYs were really
-   # PADLISTs. Now we can fix them up
+   my %protosub_by_oproot;
+
    my $count = 0;
    while( my ( $addr ) = each %$heap ) {
       my $sv = $heap->{$addr} or next;
+
+      # While dumping we weren't able to determine what ARRAYs were really
+      # PADLISTs. Now we can fix them up
       $sv->_fixup if $sv->can( "_fixup" );
+
+      # Also identify the protosub of every oproot
+      if( $sv->type eq "CODE" and $sv->oproot and $sv->is_clone ) {
+         $protosub_by_oproot{$sv->oproot} = $sv;
+      }
+
       $count++;
       $progress->( sprintf "Fixing %d of %d (%.2f%%)",
+         $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 1000) == 0;
+   }
+
+   # Now annotate the protosubs for closures
+   $count = 0;
+   while( my ( $addr ) = each %$heap ) {
+      my $sv = $heap->{$addr} or next;
+
+      if( $sv->type eq "CODE" and $sv->oproot and $sv->is_cloned ) {
+         if( my $protosub = $protosub_by_oproot{$sv->oproot} ) {
+            $sv->_set_protosub( $protosub->addr );
+         }
+      }
+
+      $count++;
+      $progress->( sprintf "Setting protosubs %d of %d (%.2f%%)",
          $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 1000) == 0;
    }
 
@@ -232,7 +269,7 @@ sub _read
    my $self = shift;
    my ( $len ) = @_;
    return "" if $len == 0;
-   $self->{fh}->read( my $buf, $len ) or croak "Cannot read - $!";
+   defined( $self->{fh}->read( my $buf, $len ) ) or croak "Cannot read - $!";
    return $buf;
 }
 
@@ -311,8 +348,38 @@ sub _read_sv
          next;
       }
 
-      return Devel::MAT::SV->load( $type, $self );
+      my $pos = tell $self->{fh};
+
+      # First read the "common" header
+      my ( $nbytes, $nptrs, $nstrs ) = @{ $self->{sv_sizes}[0] };
+
+      my $sv = Devel::MAT::SV->new( $type, $self,
+         ( $nbytes ? $self->_read( $nbytes ) : "" ), # common header
+         ( $nptrs  ? [ $self->_read_ptrs( $nptrs ) ] : undef ),
+         ( $nstrs  ? [ map { $self->_read_str } 1 .. $nstrs ] : undef ),
+      );
+
+      # Then the SV header
+      ( $nbytes, $nptrs, $nstrs ) = @{ $self->{sv_sizes}[$type] };
+
+      $sv->load(
+         ( $nbytes ? $self->_read( $nbytes ) : "" ), # header
+         ( $nptrs  ? [ $self->_read_ptrs( $nptrs ) ] : undef ),
+         ( $nstrs  ? [ map { $self->_read_str } 1 .. $nstrs ] : undef ),
+      );
+
+      return $sv;
    }
+}
+
+sub _read_ctx
+{
+   my $self = shift;
+
+   my $type = $self->_read_u8;
+   return if !$type;
+
+   return Devel::MAT::Context->load( $type, $self );
 }
 
 =head1 METHODS
@@ -457,6 +524,19 @@ sub heap
 {
    my $self = shift;
    return values %{ $self->{heap} };
+}
+
+=head2 @ctxs = $df->contexts
+
+Returns a list of L<Devel::MAT::Context> objects representing the call context
+stack in the dumpfile.
+
+=cut
+
+sub contexts
+{
+   my $self = shift;
+   return @{ $self->{contexts} };
 }
 
 =head2 $sv = $df->sv_at( $addr )

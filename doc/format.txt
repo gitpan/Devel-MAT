@@ -3,6 +3,7 @@ File consists sections:
   Roots
   Stack
   Heap
+  Context
 
 
 Header:
@@ -15,6 +16,12 @@ Header:
   U8      zero
   U16BE   FORMATVER 0
   U32     PERLVER   rev<<24 | ver<<16 | sub
+
+  U8      NTYPES
+  {U8     HEADERLEN
+   U8     NPTRS
+   U8     NSTRS}*$NTYPES
+            -- type=0 is common, then actual SV types
 
 Roots:
   PTR     UNDEF         the "undef" immortal
@@ -82,65 +89,94 @@ Heap:
 
 An SV:
   U8      TYPE       (0xff == UNKNOWN)
-  PTR     ADDRESS
-  U32     REFCNT
-  PTR     BLESSED
-  UINT    SIZE
+  Header(4+P+I):
+    PTR     ADDRESS
+    U32     REFCNT
+    UINT    SIZE
+  PTRs(1):
+            BLESSED
+  STRs(0)
 
   type: SCALAR:
-    U8      FLAGS  0x01 : has IV
-                   0x02 : IV is UV
-                   0x04 : has NV
-                   0x08 : has STR
-                   0x10 : has RV
-                   0x20 : RV is weak
-    UINT?   IV
-    double? NV
-    UINT?   PVLEN
-    STR?    PV
-    PTR     RV
+    Header(1+2I+N):
+      U8      FLAGS  0x01 : has IV
+                     0x02 : IV is UV
+                     0x04 : has NV
+                     0x08 : has STR
+      UINT    IV
+      double  NV
+      UINT    PVLEN
+    PTRs(0)
+    STRs(1):
+              PV
+
+  type: REF:
+    Header(1):
+      U8      FLAGS  0x01 : RV is weak
+    PTRs(1):
+              RV
 
   type: GLOB
-    STR     NAME
-    STR     FILE
-    UINT    LINE
-    PTR     STASH
-    PTR     SCALAR
-    PTR     ARRAY
-    PTR     HASH
-    PTR     CODE
-    PTR     EGV
-    PTR     IO
-    PTR     FORM
+    Header(I):
+      UINT    LINE
+    PTRs(8):
+              STASH
+              SCALAR
+              ARRAY
+              HASH
+              CODE
+              EGV
+              IO
+              FORM
+    STRs(2):
+              NAME
+              FILE
 
   type: ARRAY
-    UINT    COUNT = $n
-    {PTR    ELEM}*$n
+    Header(I):
+      UINT    COUNT = $n
+    PTRs(0)
+    STRs(0)
+    Body:
+      {PTR    ELEM}*$n
 
   type: HASH
-    PTR     BACKREFS
-    UINT    COUNT = $n
-    {STR    KEY
-     PTR    VALUE}*$n
+    Header(I):
+      UINT    COUNT = $n
+    PTRs(1):
+              BACKREFS
+    Body:
+      {STR    KEY
+       PTR    VALUE}*$n
 
   type: STASH
-    [fields as hash, then]
-    STR     NAME
-    PTR     MRO_LINEAR_ALL
-    PTR     MRO_LINEAR_CURRENT
-    PTR     MRO_NEXTMETHOD
-    PTR     MRO_ISA
+    [extends fields of a hash]
+    PTRs(4):
+              MRO_LINEAR_ALL
+              MRO_LINEAR_CURRENT
+              MRO_NEXTMETHOD
+              MRO_ISA
+    STRs(1):
+              NAME
 
   type: CODE
-    PTR     STASH
-    PTR     GLOB
-    STR     FILE
-    UINT    LINE
-    PTR     OUTSIDE
-    PTR     PADLIST
-    PTR     CONSTVAL
-    {U8     TYPE
-     ...         }    until TYPE==0
+    Header(1+I+P):
+      UINT    LINE
+      U8      FLAGS  0x01 : CLONE
+                     0x02 : CLONED
+                     0x04 : XSUB
+      PTR     OPROOT
+    PTRs(5):
+              STASH
+              GLOB
+              OUTSIDE
+              PADLIST
+              CONSTVAL
+    STRs(1):
+              FILE
+    Body:
+      {U8     TYPE
+       ...         }    until TYPE==0
 
      type: CONSTSV
        PTR  SV
@@ -164,16 +200,37 @@ An SV:
        PTR  SV
 
   type: IO
-    PTR     TOP
-    PTR     FORMAT
-    PTR     BOTTOM
+    PTRs(3):
+              TOP
+              FORMAT
+              BOTTOM
 
   type: LVALUE
-    U8      TYPE
-    UINT    OFF
-    UINT    LEN
-    PTR     TARG
+    Header(1 + 2I):
+      U8      TYPE
+      UINT    OFF
+      UINT    LEN
+    PTRs(1):
+              TARG
 
   type: REGEXP
 
   type: FORMAT
+
+Context:
+  type==0-terminated list of CTXs
+
+  CTX:
+    U8    TYPE
+    U8    GIMME
+    STR   FILE
+    UINT  LINE
+
+  type: SUB
+    PTR   CV
+    PTR   ARGS
+
+  type: TRY
+
+  type: EVAL
+    PTR   CODESV

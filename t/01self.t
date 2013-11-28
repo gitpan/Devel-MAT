@@ -16,7 +16,7 @@ my $ADDR = qr/0x[0-9a-f]+/;
 my $DUMPFILE = "test.pmat";
 
 Devel::MAT::Dumper::dump( $DUMPFILE );
-END { unlink $DUMPFILE; }
+#END { unlink $DUMPFILE; }
 
 my $pmat = Devel::MAT->load( $DUMPFILE );
 my $df = $pmat->dumpfile;
@@ -114,6 +114,32 @@ BEGIN { our $strongref = []; weaken( our $weakref = $strongref ) }
 
    ok( !$rv_strong->is_weak, '$strongref is not weak' );
    ok(  $rv_weak->is_weak,   '$weakref is weak'       ); # and longcat is long
+}
+
+# Code hidden in a BEGIN block wouldn't be seen
+sub make_closure
+{
+   my $env; sub { $env };
+}
+BEGIN { our $CLOSURE = make_closure(); }
+{
+   my $closure = $pmat->find_symbol( '$CLOSURE' )->rv;
+
+   ok( $closure->is_cloned, '$closure is cloned' );
+
+   my $protosub = $closure->protosub;
+   ok( defined $protosub, '$closure has a protosub' );
+
+   ok( $protosub->is_clone,  '$protosub is a clone' );
+}
+
+BEGIN { our @QUOTING = ( "1\\2", "don't", "do\0this", "at\x9fhome", "LONG"x100 ); }
+{
+   my $av = $pmat->find_symbol( '@QUOTING' );
+
+   is_deeply( [ map { $_->qq_pv( 20 ) } $av->elems ],
+              [ "'1\\\\2'", "'don\\'t'", '"do\\x00this"', '"at\\x9fhome"', "'LONGLONGLONGLONGLONG'..." ],
+              '$sv->qq_pv quotes correctly' );
 }
 
 done_testing;

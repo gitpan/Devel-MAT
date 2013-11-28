@@ -8,7 +8,7 @@ package Devel::MAT;
 use strict;
 use warnings;
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 use Carp;
 use List::Util qw( pairs );
@@ -30,6 +30,16 @@ A C<Devel::MAT> instance loads a heapdump file, and provides a container to
 store analysis tools to work on it. Tools may be provided that conform to the
 L<Devel::MAT::Tool> API, which can help analyse the data and interact with the
 explorer user interface by using the methods in the L<Devel::MAT::UI> package.
+
+=head2 File Format
+
+The dump file format is still under development, so at present no guarantees
+are made on whether files can be loaded over mismatching versions of
+C<Devel::MAT>. However, as of version 0.11 the format should be more
+extensible, allowing new SV fields to be added without breaking loading - older
+tools will ignore new fields and newer tools will just load undef for fields
+absent in older files. As the distribution approaches maturity the format will
+be made more stable.
 
 =cut
 

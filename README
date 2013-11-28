@@ -8,6 +8,15 @@ DESCRIPTION
     interact with the explorer user interface by using the methods in the
     Devel::MAT::UI package.
 
+  File Format
+    The dump file format is still under development, so at present no
+    guarantees are made on whether files can be loaded over mismatching
+    versions of `Devel::MAT'. However, as of version 0.11 the format should
+    be more extensible, allowing new SV fields to be added without breaking
+    loading - older tools will ignore new fields and newer tools will just
+    load undef for fields absent in older files. As the distribution
+    approaches maturity the format will be made more stable.
+
 CONSTRUCTOR
   $pmat = Devel::MAT->load( $path, %args )
     Loads a heap dump file from the given path, and returns a new

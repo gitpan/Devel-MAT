@@ -8,9 +8,9 @@ package Devel::MAT::Tool::Inrefs;
 use strict;
 use warnings;
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
-use List::Util qw( pairmap pairs pairkeys pairvalues );
+use List::Util qw( pairmap pairs );
 
 =head1 NAME
 
@@ -30,8 +30,6 @@ sub new
    my $class = shift;
    my ( $pmat, %args ) = @_;
 
-   *Devel::MAT::SV::inrefs = \&sv_inrefs;
-
    $class->patch_inrefs( $pmat->dumpfile, progress => $args{progress} );
 
    return $class;
@@ -47,8 +45,10 @@ sub patch_inrefs
    my $heap_total = scalar $df->heap;
    my $count = 0;
    foreach my $sv ( $df->heap ) {
-      foreach my $ref ( pairvalues $sv->outrefs ) {
-         push @{ $ref->{tool_inrefs} }, $sv->addr if !$ref->immortal;
+      # Undocumented internal method Devel::MAT::SV
+      foreach ( pairs $sv->_outrefs_matching( undef, 1 ) ) {
+         my ( $name, $ref ) = @$_;
+         push @{ $ref->{tool_inrefs} }, $name, $sv->addr if !$ref->immortal;
       }
 
       $count++;
@@ -56,14 +56,14 @@ sub patch_inrefs
          $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 200) == 0
    }
 
-   foreach ( pairs $df->roots ) {
+   foreach ( pairs $df->_roots ) {
       my ( $name, $sv ) = @$_;
-      push @{ $sv->{tool_inrefs} }, $name if defined $sv;
+      push @{ $sv->{tool_inrefs} }, $name, undef if defined $sv;
    }
 
    foreach my $addr ( @{ $df->{stack_at} } ) { # TODO
       my $sv = $df->sv_at( $addr ) or next;
-      push @{ $sv->{tool_inrefs} }, "a value on the stack";
+      push @{ $sv->{tool_inrefs} }, "a value on the stack", undef;
    }
 }
 
@@ -77,38 +77,59 @@ Returns a name/value list giving names and other SV objects for each of the
 SVs that refer to this one. This is formed by the inverse mapping along the SV
 graph from C<outrefs>.
 
+=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs_strong
+
+=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs_weak
+
+=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs_direct
+
+=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs_indirect
+
+=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs_inferred
+
+Returns a name/value list giving names and other SV objects filtered by type,
+analogous to the various C<outrefs_*> methods.
+
 =cut
 
-sub sv_inrefs
+sub Devel::MAT::SV::_inrefs
 {
    my $self = shift;
+   my ( $match ) = @_;
 
    $self->{tool_inrefs} ||= [];
 
-   return @{ $self->{tool_inrefs} } if !wantarray;
-
    my $df = $self->{df};
-   my %seen;
    my @inrefs;
-   foreach ( @{ $self->{tool_inrefs} } ) {
-      next if $seen{$_}++;
+   foreach ( pairs @{ $self->{tool_inrefs} } ) {
+      my ( $name, $addr ) = @$_;
 
-      if( m/^\d+$/ ) {
-         my $sv = $df->sv_at( $_ );
+      if( $addr and $addr =~ m/^\d+$/ ) {
+         my $sv = $df->sv_at( $addr );
          if( $sv ) {
-            push @inrefs, pairmap { $b == $self ? ( $a => $sv ) : () } $sv->outrefs;
+            push @inrefs, $name, $sv;
          }
          else {
             warn "Unable to find SV at $_ for $sv inref\n";
          }
       }
       else {
-         push @inrefs, $_ => undef;
+         push @inrefs, $name => undef;
       }
    }
 
+   @inrefs = pairmap { $a =~ m/^$match/ ? ( substr( $a, 1 ) => $b ) : () } @inrefs;
+
+   return @inrefs / 2 if !wantarray;
    return @inrefs;
 }
+
+sub Devel::MAT::SV::inrefs          { shift->_inrefs( qr/./    ) }
+sub Devel::MAT::SV::inrefs_strong   { shift->_inrefs( qr/\+/   ) }
+sub Devel::MAT::SV::inrefs_weak     { shift->_inrefs( qr/-/    ) }
+sub Devel::MAT::SV::inrefs_direct   { shift->_inrefs( qr/[+-]/ ) }
+sub Devel::MAT::SV::inrefs_indirect { shift->_inrefs( qr/;/    ) }
+sub Devel::MAT::SV::inrefs_inferred { shift->_inrefs( qr/\./   ) }
 
 =head1 AUTHOR
 

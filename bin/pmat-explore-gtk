@@ -23,7 +23,7 @@ my $df;
 my %ICONS;        # {$name} = $pixbuf
 my %TYPES_LARGE;  # {$type} = $pixbuf
 
-foreach (qw( SCALAR REF ARRAY HASH CODE GLOB STASH LVALUE REGEXP IO FORMAT )) {
+foreach (qw( SCALAR REF ARRAY HASH CODE GLOB STASH LVALUE REGEXP IO FORMAT PADLIST PADNAMES PAD )) {
    Devel::MAT::UI->register_icon( name => "type-$_", svg => "icons/type-$_.svg" );
 
    $TYPES_LARGE{$_} = Gtk2::Gdk::Pixbuf->new_from_file_at_size(
@@ -53,6 +53,48 @@ my $backbtn = $toolbar->append_item( "Back", "Go back to the previous SV", "",
    Gtk2::Image->new_from_stock("gtk-go-back", "small-toolbar"), \&history_back );
 my $forwardbtn = $toolbar->append_item( "Forward", "Go forward to the next SV", "",
    Gtk2::Image->new_from_stock("gtk-go-forward", "small-toolbar"), \&history_forward );
+
+$toolbar->append_space;
+
+my $svs_loaded;
+
+my $outrefs_mth = "outrefs";
+my $inrefs_mth = "inrefs";
+{
+   my %mode_buttons;
+
+   my %mode_tooltip = (
+      All    => "Display and count every kind of inref and outref",
+      Direct => "Display and count only direct inrefs and outrefs",
+      Strong => "Display and count only strong direct inrefs and outrefs",
+   );
+
+   my $group;
+   foreach my $mode (qw( All Direct Strong )) {
+      my $filter = $mode eq "All" ? "" : "_\L$mode";
+
+      my $img = module_file( "Devel::MAT::UI", "icons/refs-$mode.svg" );
+
+      my $button = $mode_buttons{$mode} = $toolbar->append_element(
+         "radiobutton", undef, $mode, $mode_tooltip{$mode}, "",
+         Gtk2::Image->new_from_file( $img ),
+         sub {
+            my ( $button ) = @_;
+            return unless $button->get_active;
+
+            $outrefs_mth = "outrefs$filter";
+            $inrefs_mth  = "inrefs$filter";
+
+            reset_svlist_refs() if $svs_loaded;
+            redisplay_sv();
+         });
+
+      $button->set_group( $group ) if $group;
+      $group ||= $button->get_group;
+   }
+
+   $mode_buttons{All}->set_active( TRUE );
+}
 
 ### History management
 {
@@ -107,6 +149,11 @@ my $forwardbtn = $toolbar->append_item( "Forward", "Go forward to the next SV", 
       $forwardbtn->set_sensitive( scalar @forward_sv );
 
       display_sv( $current_sv );
+   }
+
+   sub redisplay_sv
+   {
+      display_sv( $current_sv ) if $current_sv;
    }
 }
 
@@ -261,13 +308,35 @@ foreach my $sv ( $df->heap ) {
       2 => $sv->desc,
       3 => $sv->size,
       4 => ( $sv->blessed ? $sv->blessed->stashname : "" ),
-      5 => scalar $sv->outrefs,
-      6 => scalar $sv->inrefs,
+      5 => scalar $sv->$outrefs_mth,
+      6 => scalar $sv->$inrefs_mth,
    );
    $count++;
    progress( sprintf "Loading GTK TreeView %d of %d (%.2f%%)",
       $count, $total, $count*100 / $total ) if ($count % 1000) == 0;
    $bytes += $sv->size;
+}
+
+$svs_loaded = 1;
+
+sub reset_svlist_refs
+{
+   my $count = 0;
+   for ( my $iter = $svlist_model->get_iter_first; $iter; $iter = $svlist_model->iter_next( $iter ) ) {
+      my $addr = $svlist_model->get( $iter, 1 );
+      my $sv = $df->sv_at( $addr );
+
+      $svlist_model->set( $iter,
+         5 => scalar $sv->$outrefs_mth,
+         6 => scalar $sv->$inrefs_mth,
+      );
+
+      $count++;
+      progress( sprintf "Loading GTK TreeView %d of %d (%.2f%%)",
+         $count, $total, $count*100 / $total ) if ($count % 1000) == 0;
+   }
+
+   progress( "Done" );
 }
 
 $bytetotal_label->set_text( $bytes . " bytes" );
@@ -392,7 +461,7 @@ sub display_sv
       "Addr" => "text",
       "Desc" => "text",
    );
-   foreach ( sort_by { $_->[0] } pairs $sv->outrefs ) {
+   foreach ( sort_by { $_->[0] } pairs $sv->$outrefs_mth ) {
       my ( $name, $ref ) = @$_;
       push @{ $outrefs->{data} }, [ $name, sprintf( "%#x", $ref->addr ), $ref->desc ];
    }
@@ -411,7 +480,7 @@ sub display_sv
       "Addr" => "text",
       "Desc" => "text",
    );
-   foreach ( sort_by { $_->[0] } pairs $sv->inrefs ) {
+   foreach ( sort_by { $_->[0] } pairs $sv->$inrefs_mth ) {
       my ( $name, $ref ) = @$_;
       if( $ref ) {
          push @{ $inrefs->{data} }, [ $name, sprintf( "%#x", $ref->addr ), $ref->desc ];
@@ -509,6 +578,7 @@ sub Devel::MAT::UI::register_icon
 }
 
 my %COLTYPES; BEGIN { %COLTYPES = (
+   int  => { store_type => "Glib::Int",    renderer => "Gtk2::CellRendererText",   attr => "text"   },
    text => { store_type => "Glib::String", renderer => "Gtk2::CellRendererText",   attr => "text"   },
    icon => { store_type => "Glib::String", renderer => "Gtk2::CellRendererPixbuf", func => sub {
       my ( $column, $cell, $model, $iter, $idx ) = @_;

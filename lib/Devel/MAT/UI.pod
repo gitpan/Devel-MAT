@@ -43,7 +43,7 @@ the column.
 
 =item type => STRING
 
-The type of the column. This may be C<text> or C<icon>.
+The type of the column. This may be C<int>, C<text> or C<icon>.
 
 =item title => STRING
 

@@ -1,5 +1,5 @@
 NAME
-    `Devel::MAT' - analyse perl memory usage
+    `Devel::MAT' - Perl Memory Analysis Tool
 
 DESCRIPTION
     A `Devel::MAT' instance loads a heapdump file, and provides a container

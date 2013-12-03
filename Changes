@@ -1,5 +1,19 @@
 Revision history for Devel-MAT
 
+0.12    2013/12/03 15:18:43
+        [CHANGES]
+         * Classify outrefs and inrefs into various kinds
+         * Subclass ARRAY into PADLIST, PADNAMES, PAD for CODE
+         * Allow selection of what kinds of refs to count/display on the GTK
+           explorer
+         * Store more flags (CvWEAKOUTSIDE, CvCVGV_RC, AvREAL) so as to get
+           strong/weak references correct
+         * Store the SvOUTSTASH of SCALARs and REFs
+         * Added a commandline wrapper for $pmat->identify
+
+        [BUGFIXES]
+         * require() tool .pm files automatically when calling ->load_tool
+
 0.11    2013/11/28 14:30:32
         [CHANGES]
          * Complete redesign of dumpfile format so it is more extensible in future

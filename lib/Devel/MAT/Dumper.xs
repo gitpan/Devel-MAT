@@ -31,9 +31,9 @@ static uint8_t sv_sizes[] = {
   /* Header                   PTRs,  STRs */
   4 + PTRSIZE + UVSIZE,       1,     0,     /* common SV */
   UVSIZE,                     8,     2,     /* GLOB */
-  1 + 2*UVSIZE + PMAT_NVSIZE, 0,     1,     /* SCALAR */
-  1,                          1,     0,     /* REF */
-  UVSIZE,                     0,     0,     /* ARRAY + has body */
+  1 + 2*UVSIZE + PMAT_NVSIZE, 1,     1,     /* SCALAR */
+  1,                          2,     0,     /* REF */
+  1 + UVSIZE,                 0,     0,     /* ARRAY + has body */
   UVSIZE,                     1,     0,     /* HASH + has body */
   UVSIZE + 0,                 1 + 4, 0 + 1, /* STASH = extends HASH */
   1 + UVSIZE + PTRSIZE,       5,     1,     /* CODE + has body */
@@ -265,6 +265,9 @@ static void write_private_sv(FILE *fh, const SV *sv)
   write_nv(fh, SvNOK(sv) ? SvNVX(sv) : 0.0);
   write_uint(fh, SvPOK(sv) ? SvCUR(sv) : 0);
 
+  // PTRs
+  write_svptr(fh, (SV *)SvOURSTASH(sv));
+
   // STRs
   if(SvPOK(sv)) {
     STRLEN len = SvCUR(sv);
@@ -285,6 +288,7 @@ static void write_private_rv(FILE *fh, const SV *rv)
 
   // PTRs
   write_svptr(fh, SvRV(rv));
+  write_svptr(fh, (SV *)SvOURSTASH(rv));
 }
 
 static void write_private_av(FILE *fh, const AV *av)
@@ -296,6 +300,7 @@ static void write_private_av(FILE *fh, const AV *av)
 
   // Header
   write_uint(fh, len);
+  write_u8(fh, (!AvREAL(av) ? 0x01 : 0));
 
   // Body
   int i;
@@ -428,9 +433,17 @@ static void write_private_cv(FILE *fh, const CV *cv)
       line = CopLINE((COP*)start);
   }
   write_uint(fh, line);
-  write_u8(fh, (CvCLONE(cv)  ? 0x01 : 0) |
-               (CvCLONED(cv) ? 0x02 : 0) |
-               (CvISXSUB(cv) ? 0x04 : 0));
+  write_u8(fh, (CvCLONE(cv)       ? 0x01 : 0) |
+               (CvCLONED(cv)      ? 0x02 : 0) |
+               (CvISXSUB(cv)      ? 0x04 : 0) |
+               (CvWEAKOUTSIDE(cv) ? 0x08 : 0) |
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 14)
+               (CvCVGV_RC(cv)     ? 0x10 : 0) |
+#else
+/* Prior to 5.14, CvANON() was used to indicate this */
+               (CvANON(cv)        ? 0x10 : 0) |
+#endif
+               0);
   if(!CvISXSUB(cv) && !CvCONST(cv))
     write_ptr(fh, CvROOT(cv));
   else

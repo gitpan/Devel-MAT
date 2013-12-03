@@ -1,5 +1,5 @@
 ---
-abstract: 'analyse perl memory usage'
+abstract: 'Perl Memory Analysis Tool'
 author:
   - 'Paul Evans <leonerd@leonerd.org.uk>'
 build_requires:
@@ -16,88 +16,97 @@ name: Devel-MAT
 provides:
   Devel::MAT:
     file: lib/Devel/MAT.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::Context:
     file: lib/Devel/MAT/Context.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::Context::EVAL:
     file: lib/Devel/MAT/Context.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::Context::SUB:
     file: lib/Devel/MAT/Context.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::Context::TRY:
     file: lib/Devel/MAT/Context.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::Dumper:
     file: lib/Devel/MAT/Dumper.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::Dumpfile:
     file: lib/Devel/MAT/Dumpfile.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::ARRAY:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::CODE:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::FORMAT:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::GLOB:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::HASH:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::INVLIST:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::IO:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::Immortal:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::LVALUE:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::NO:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
+  Devel::MAT::SV::PAD:
+    file: lib/Devel/MAT/SV.pm
+    version: 0.12
+  Devel::MAT::SV::PADLIST:
+    file: lib/Devel/MAT/SV.pm
+    version: 0.12
+  Devel::MAT::SV::PADNAMES:
+    file: lib/Devel/MAT/SV.pm
+    version: 0.12
   Devel::MAT::SV::REF:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::REGEXP:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::SCALAR:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::STASH:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::UNDEF:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::Unknown:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::SV::YES:
     file: lib/Devel/MAT/SV.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::Tool::Count:
     file: lib/Devel/MAT/Tool/Count.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::Tool::Inrefs:
     file: lib/Devel/MAT/Tool/Inrefs.pm
-    version: 0.11
+    version: 0.12
   Devel::MAT::Tool::Reachability:
     file: lib/Devel/MAT/Tool/Reachability.pm
-    version: 0.11
+    version: 0.12
 requires:
   File::ShareDir: 1.00
   List::Util: 1.29
@@ -105,4 +114,4 @@ requires:
   perl: 5.010
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.11
+version: 0.12

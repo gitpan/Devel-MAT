@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 use feature qw( say switch );
+no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 use Devel::MAT;
 
@@ -28,11 +29,14 @@ sub show_sv
       }
       when( "SCALAR" ) {
          say '  UV=' . $sv->uv if defined $sv->uv;
+         say '  IV=' . $sv->iv if defined $sv->iv;
          say '  NV=' . $sv->nv if defined $sv->nv;
          if( defined( my $pv = $sv->pv ) ) {
             say '  PV=' . $pv if length $pv < 40 and $pv !~ m/[\0-\x1f\x80-\x9f]/;
-            say '  PV{' . length($pv) . '}';
+            say '  PVLEN ' . $sv->pvlen;
          }
+      }
+      when( "REF" ) {
          say '  RV=' . $sv->rv->desc_addr if $sv->rv;
       }
       when( "ARRAY" ) {

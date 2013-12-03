@@ -1,0 +1,14 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Devel::MAT;
+
+my $pmat = Devel::MAT->load( $ARGV[0] // die "Need dumpfile\n" );
+my $addr = $ARGV[1] // die "Need an SV addr\n";
+$addr = hex $addr if $addr =~ m/^0x/;
+
+my $df = $pmat->dumpfile;
+
+print "$_\n" for $pmat->identify( $df->sv_at( $addr ) );

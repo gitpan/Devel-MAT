@@ -34,6 +34,11 @@ BEGIN { our @AofA = ( [] ); }
    my %av2_inrefs = $av2->inrefs;
    is( $av2_inrefs{"the referrant"}, $rv, '$av2 is referred to as the referrant of $rv' );
    is( $av2_inrefs{"element [0] via RV"}, $av, '$av2 is referred to as element[0] via RV of $av' );
+
+   is_deeply( [ $av2->inrefs_direct ],
+              [ "the referrant" => $rv ], '$av2->inrefs_direct' );
+   is_deeply( [ $av2->inrefs_indirect ],
+              [ "element [0] via RV" => $av ], '$av2->inrefs_indirect' );
 }
 
 {
@@ -60,9 +65,11 @@ BEGIN { our $PACKAGE_SCALAR = "some value" }
 
    is_deeply( [ map { s/$ADDR/ADDR/g; s/\d+/NNN/g; $_ } $pmat->identify( $sv ) ],
               [ "the scalar of GLOB(\$*) at ADDR, which is:",
-                "  element [NNN] directly of ARRAY(NNN) at ADDR, which is:",
+                "  a backref indirectly of STASH(NNN) at ADDR, which is:",
+                "    the default stash",
+                "  element [NNN] directly of ARRAY(NNN,!REAL) at ADDR, which is:",
                 "    the backrefs list of STASH(NNN) at ADDR, which is:",
-                "      the default stash",
+                "      already found",
                 "  the egv of GLOB(\$*) at ADDR, which is:",
                 "    itself",
                 "  value {PACKAGE_SCALAR} directly of STASH(NNN) at ADDR, which is:",

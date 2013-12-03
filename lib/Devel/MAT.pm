@@ -8,7 +8,7 @@ package Devel::MAT;
 use strict;
 use warnings;
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 use Carp;
 use List::Util qw( pairs );
@@ -22,7 +22,7 @@ use Module::Pluggable
 
 =head1 NAME
 
-C<Devel::MAT> - analyse perl memory usage
+C<Devel::MAT> - Perl Memory Analysis Tool
 
 =head1 DESCRIPTION
 
@@ -88,9 +88,17 @@ Lists the L<Devel::MAT::Tool> classes that are installed and available.
 
 =cut
 
-sub available_tools
 {
-   return map { $_ =~ s/^Devel::MAT::Tool:://; $_ } shift->_available_tools;
+   my @TOOLS;
+   my $TOOLS_LOADED;
+
+   sub available_tools
+   {
+      return @TOOLS if $TOOLS_LOADED;
+
+      $TOOLS_LOADED++;
+      return @TOOLS = map { $_ =~ s/^Devel::MAT::Tool:://; $_ } shift->_available_tools;
+   }
 }
 
 =head2 $tool = $pmat->load_tool( $name )
@@ -103,6 +111,9 @@ sub load_tool
 {
    my $self = shift;
    my ( $name, %args ) = @_;
+
+   # Ensure tools are 'require'd
+   $self->available_tools;
 
    my $tool_class = "Devel::MAT::Tool::$name";
    return $self->{tools}{$name} ||= $tool_class->new( $self, %args );

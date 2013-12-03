@@ -83,6 +83,9 @@ sub PACKAGE_CODE { my $lexvar = "An unlikely scalar value"; }
    my @constants = $cv->constants;
    ok( @constants, 'CV has constants' );
    is( $constants[0]->pv, "An unlikely scalar value", 'CV constants' );
+
+   is( $cv->padnames->type, "PADNAMES", 'CV has padnames' );
+   is( $cv->pad(0)->type,   "PAD",      'CV has pad(0)' );
 }
 
 BEGIN { our @AofA = ( [] ); }
@@ -95,6 +98,11 @@ BEGIN { our @AofA = ( [] ); }
    my %av_outrefs = $av->outrefs;
    is( $av_outrefs{"element [0] directly"}, $rv, '$rv is element[0] directly of $av' );
    is( $av_outrefs{"element [0] via RV"}, $av2, '$av2 is element [0] via RV of $av' );
+
+   is_deeply( [ $av->outrefs_direct ],
+              [ "element [0] directly" => $rv ], '$av->outrefs_direct' );
+   is_deeply( [ $av->outrefs_indirect ],
+              [ "element [0] via RV" => $av2 ], '$av->outrefs_indirect' );
 }
 
 BEGIN { our $LVREF = \substr our $TMPPV = "abc", 1, 2 }

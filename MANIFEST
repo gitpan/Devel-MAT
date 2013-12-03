@@ -2,6 +2,7 @@ bin/pmat-callstack
 bin/pmat-count
 bin/pmat-dump-symbols
 bin/pmat-explore-gtk
+bin/pmat-identify-sv
 bin/pmat-list-dangling-ptrs
 bin/pmat-list-orphans
 bin/pmat-show-sv
@@ -32,6 +33,9 @@ share/icons/reachable-padlist.svg
 share/icons/reachable-symtab.svg
 share/icons/reachable-user.svg
 share/icons/reachable-yes.svg
+share/icons/refs-All.svg
+share/icons/refs-Direct.svg
+share/icons/refs-Strong.svg
 share/icons/type-ARRAY.svg
 share/icons/type-CODE.svg
 share/icons/type-FORMAT.svg
@@ -39,6 +43,9 @@ share/icons/type-GLOB.svg
 share/icons/type-HASH.svg
 share/icons/type-IO.svg
 share/icons/type-LVALUE.svg
+share/icons/type-PAD.svg
+share/icons/type-PADLIST.svg
+share/icons/type-PADNAMES.svg
 share/icons/type-REF.svg
 share/icons/type-REGEXP.svg
 share/icons/type-SCALAR.svg

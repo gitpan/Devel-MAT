@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 use constant FOR_UI => 1;
 
@@ -201,7 +201,7 @@ sub mark_reachable
 
                $cv->padlist and $cv->padlist->{tool_reachable} = REACH_PADLIST;
 
-               my $padnames = $cv->padnames_av;
+               my $padnames = $cv->padnames;
                if( $padnames ) {
                   $_ and $_->{tool_reachable} = REACH_PADLIST for $padnames, $padnames->elems;
                }

@@ -106,15 +106,17 @@ An SV:
       UINT    IV
       double  NV
       UINT    PVLEN
-    PTRs(0)
+    PTRs(1):
+              OURSTASH
     STRs(1):
               PV
 
   type: REF:
     Header(1):
       U8      FLAGS  0x01 : RV is weak
-    PTRs(1):
+    PTRs(2):
               RV
+              OURSTASH
 
   type: GLOB
     Header(I):
@@ -133,8 +135,9 @@ An SV:
               FILE
 
   type: ARRAY
-    Header(I):
+    Header(1+I):
       UINT    COUNT = $n
+      U8      FLAGS  0x01 : AV is not REAL
     PTRs(0)
     STRs(0)
     Body:
@@ -165,6 +168,8 @@ An SV:
       U8      FLAGS  0x01 : CLONE
                      0x02 : CLONED
                      0x04 : XSUB
+                     0x08 : WEAKOUTSIDE
+                     0x10 : CVGV_RC
       PTR     OPROOT
     PTRs(5):
               STASH

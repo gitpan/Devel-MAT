@@ -8,11 +8,13 @@ package Devel::MAT::Dumpfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 
 use Carp;
 use IO::Handle;   # ->read
 use IO::Seekable; # ->tell
+
+use List::Util qw( pairmap );
 
 use Devel::MAT::SV;
 use Devel::MAT::Context;
@@ -41,51 +43,51 @@ SV is represented by an instance of L<Devel::MAT::SV>.
 my @ROOTS;
 my %ROOTDESC;
 foreach (
-   [ main_cv         => "the main code" ],
-   [ defstash        => "the default stash" ],
-   [ mainstack       => "the main stack AV" ],
-   [ beginav         => "the BEGIN list" ],
-   [ checkav         => "the CHECK list" ],
-   [ unitcheckav     => "the UNITCHECK list" ],
-   [ initav          => "the INIT list" ],
-   [ endav           => "the END list" ],
-   [ strtabhv        => "the shared string table HV" ],
-   [ envgv           => "the ENV GV" ],
-   [ incgv           => "the INC GV" ],
-   [ statgv          => "the stat GV" ],
-   [ statname        => "the statname SV" ],
-   [ tmpsv           => "the temporary SV" ],
-   [ defgv           => "the default GV" ],
-   [ argvgv          => "the ARGV GV" ],
-   [ argvoutgv       => "the argvout GV" ],
-   [ argvout_stack   => "the argvout stack AV" ],
-   [ fdpidav         => "the FD-to-PID mapping AV" ],
-   [ preambleav      => "the compiler preamble AV" ],
-   [ modglobalhv     => "the module data globals HV" ],
-   [ regex_padav     => "the REGEXP pad AV" ],
-   [ sortstash       => "the sort stash" ],
-   [ firstgv         => "the *a GV" ],
-   [ secondgv        => "the *b GV" ],
-   [ debstash        => "the debugger stash" ],
-   [ stashcache      => "the stash cache" ],
-   [ isarev          => "the reverse map of \@ISA dependencies" ],
-   [ registered_mros => "the registered MROs HV" ],
-   [ rs              => "the IRS" ],
-   [ last_in_gv      => "the last input GV" ],
-   [ ofsgv           => "the OFS GV" ],
-   [ defoutgv        => "the default output GV" ],
-   [ hintgv          => "the hints (%^H) GV" ],
-   [ patchlevel      => "the patch level" ],
-   [ apiversion      => "the API version" ],
-   [ e_script        => "the '-e' script" ],
-   [ mess_sv         => "the message SV" ],
-   [ ors_sv          => "the ORS SV" ],
-   [ encoding        => "the encoding" ],
-   [ blockhooks      => "the block hooks" ],
-   [ custom_ops      => "the custom ops HV" ],
-   [ custom_op_names => "the custom op names HV" ],
-   [ custom_op_descs => "the custom op descriptions HV" ],
-   map { [ $_ => "the $_" ] } qw(
+   [ main_cv         => "+the main code" ],
+   [ defstash        => "+the default stash" ],
+   [ mainstack       => "+the main stack AV" ],
+   [ beginav         => "+the BEGIN list" ],
+   [ checkav         => "+the CHECK list" ],
+   [ unitcheckav     => "+the UNITCHECK list" ],
+   [ initav          => "+the INIT list" ],
+   [ endav           => "+the END list" ],
+   [ strtab          => "+the shared string table HV" ],
+   [ envgv           => "-the ENV GV" ],
+   [ incgv           => "+the INC GV" ],
+   [ statgv          => "+the stat GV" ],
+   [ statname        => "+the statname SV" ],
+   [ tmpsv           => "+the temporary SV" ],
+   [ defgv           => "-the default GV" ],
+   [ argvgv          => "-the ARGV GV" ],
+   [ argvoutgv       => "+the argvout GV" ],
+   [ argvout_stack   => "+the argvout stack AV" ],
+   [ fdpidav         => "+the FD-to-PID mapping AV" ],
+   [ preambleav      => "+the compiler preamble AV" ],
+   [ modglobalhv     => "+the module data globals HV" ],
+   [ regex_padav     => "+the REGEXP pad AV" ],
+   [ sortstash       => "+the sort stash" ],
+   [ firstgv         => "-the *a GV" ],
+   [ secondgv        => "-the *b GV" ],
+   [ debstash        => "-the debugger stash" ],
+   [ stashcache      => "+the stash cache" ],
+   [ isarev          => "+the reverse map of \@ISA dependencies" ],
+   [ registered_mros => "+the registered MROs HV" ],
+   [ rs              => "+the IRS" ],
+   [ last_in_gv      => "+the last input GV" ],
+   [ ofsgv           => "-the OFS GV" ],
+   [ defoutgv        => "+the default output GV" ],
+   [ hintgv          => "-the hints (%^H) GV" ],
+   [ patchlevel      => "+the patch level" ],
+   [ apiversion      => "+the API version" ],
+   [ e_script        => "+the '-e' script" ],
+   [ mess_sv         => "+the message SV" ],
+   [ ors_sv          => "+the ORS SV" ],
+   [ encoding        => "+the encoding" ],
+   [ blockhooks      => "+the block hooks" ],
+   [ custom_ops      => "+the custom ops HV" ],
+   [ custom_op_names => "+the custom op names HV" ],
+   [ custom_op_descs => "+the custom op descriptions HV" ],
+   map { [ $_ => "+the $_" ] } qw(
       Latin1 UpperLatin1 AboveLatin1 NonL1NonFinalFold HasMultiCharFold
       utf8_mark utf8_X_regular_begin utf8_X_extend utf8_toupper utf8_totitle
       utf8_tolower utf8_tofold utf8_charname_begin utf8_charname_continue
@@ -471,10 +473,16 @@ Returns a key/value pair list giving the names and SVs at each of the roots.
 
 =cut
 
-sub roots
+sub _roots
 {
    my $self = shift;
    return map { +$ROOTDESC{$_} => $self->sv_at( $self->{"${_}_at"} ) } @ROOTS;
+}
+
+sub roots
+{
+   my $self = shift;
+   return pairmap { substr( $a, 1 ) => $b } $self->_roots;
 }
 
 =head2 $sv = $df->ROOT

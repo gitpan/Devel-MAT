@@ -54,8 +54,6 @@ my $backbtn = $toolbar->append_item( "Back", "Go back to the previous SV", "",
 my $forwardbtn = $toolbar->append_item( "Forward", "Go forward to the next SV", "",
    Gtk2::Image->new_from_stock("gtk-go-forward", "small-toolbar"), \&history_forward );
 
-$toolbar->append_space;
-
 my $svs_loaded;
 
 my $outrefs_mth = "outrefs";
@@ -69,31 +67,29 @@ my $inrefs_mth = "inrefs";
       Strong => "Display and count only strong direct inrefs and outrefs",
    );
 
-   my $group;
-   foreach my $mode (qw( All Direct Strong )) {
-      my $filter = $mode eq "All" ? "" : "_\L$mode";
+   Devel::MAT::UI->provides_radiobutton_set(
+      map {
+         my $filter = $_ eq "All" ? "" : "_\L$_";
 
-      my $img = module_file( "Devel::MAT::UI", "icons/refs-$mode.svg" );
+         Devel::MAT::UI->register_icon(
+            name => "refs-$_",
+            svg => "icons/refs-$_.svg"
+         );
 
-      my $button = $mode_buttons{$mode} = $toolbar->append_element(
-         "radiobutton", undef, $mode, $mode_tooltip{$mode}, "",
-         Gtk2::Image->new_from_file( $img ),
-         sub {
-            my ( $button ) = @_;
-            return unless $button->get_active;
+         {
+            text    => $_,
+            icon    => "refs-$_",
+            tooltip => $mode_tooltip{$_},
+            code    => sub {
+               $outrefs_mth = "outrefs$filter";
+               $inrefs_mth  = "inrefs$filter";
 
-            $outrefs_mth = "outrefs$filter";
-            $inrefs_mth  = "inrefs$filter";
-
-            reset_svlist_refs() if $svs_loaded;
-            redisplay_sv();
-         });
-
-      $button->set_group( $group ) if $group;
-      $group ||= $button->get_group;
-   }
-
-   $mode_buttons{All}->set_active( TRUE );
+               reset_svlist_refs() if $svs_loaded;
+               redisplay_sv();
+            },
+         }
+      } qw( All Direct Strong )
+   );
 }
 
 ### History management
@@ -191,7 +187,7 @@ add_menuitem( $navmenu, "To SV..." => sub {
    $d->show;
 });
 
-my $gotomenu = add_submenu( $menu, "Goto" );
+my $rootmenu = add_submenu( $menu, "Roots" );
 
 my $toolmenu;
 foreach my $tool ( sort Devel::MAT->available_tools ) {
@@ -200,6 +196,10 @@ foreach my $tool ( sort Devel::MAT->available_tools ) {
 
    $toolmenu ||= add_submenu( $menu, "Tools" );
    add_menuitem( $toolmenu, $tool, sub {
+      my ( $mi ) = @_;
+
+      $mi->set_sensitive( FALSE );
+
       my $tool = $pmat->load_tool( $tool, progress => \&progress );
       $tool->init_ui( "Devel::MAT::UI" );
       progress( "Done" );
@@ -228,10 +228,11 @@ $win->show_all;
    }
 }
 
-$pmat = Devel::MAT->load(
-   $ARGV[0] // die( "Need dumpfile\n" ),
-   progress => \&progress,
-);
+my $filename = $ARGV[0] or die "Need dumpfile\n";
+
+$win->set_title( "$filename - pmat-explore-gtk" );
+
+$pmat = Devel::MAT->load( $filename, progress => \&progress );
 $df = $pmat->dumpfile;
 
 $perlver_label->set_text( "Perl " . $df->perlversion );
@@ -242,7 +243,7 @@ $pmat->load_tool( "Inrefs", progress => \&progress );
 
 foreach ( pairs $df->roots ) {
    my ( $desc, $sv ) = @$_;
-   add_menuitem( $gotomenu, $desc, sub { history_nav( $sv ) } ) if $sv;
+   add_menuitem( $rootmenu, $desc, sub { history_nav( $sv ) } ) if $sv;
 }
 
 my $svlist_model = Gtk2::ListStore->new(
@@ -254,6 +255,15 @@ my $svlist_model = Gtk2::ListStore->new(
    "Glib::Int",
    "Glib::Int",
 );
+
+# UI column constants
+sub Devel::MAT::UI::COLUMN_TYPE   () { 0 }
+sub Devel::MAT::UI::COLUMN_ADDR   () { 1 }
+sub Devel::MAT::UI::COLUMN_DESC   () { 2 }
+sub Devel::MAT::UI::COLUMN_SIZE   () { 3 }
+sub Devel::MAT::UI::COLUMN_BLESSED() { 4 }
+sub Devel::MAT::UI::COLUMN_OUTREFS() { 5 }
+sub Devel::MAT::UI::COLUMN_INREFS () { 6 }
 
 my $svlist_view = Gtk2::TreeView->new;
 $svlist_view->set_model( $svlist_model );
@@ -577,6 +587,32 @@ sub Devel::MAT::UI::register_icon
    $ICONS{$name} = Gtk2::Gdk::Pixbuf->new_from_file( module_file( "Devel::MAT::UI", $path ) );
 }
 
+sub Devel::MAT::UI::provides_radiobutton_set
+{
+   shift;
+
+   $toolbar->append_space;
+
+   my $group;
+   foreach my $button ( @_ ) {
+      my $code = $button->{code};
+
+      my $button = $toolbar->append_element(
+         "radiobutton", undef, $button->{text}, $button->{tooltip}, "",
+         $button->{icon} ? Gtk2::Image->new_from_pixbuf( $ICONS{$button->{icon}} // die "No icon $button->{icon}" ) : undef,
+         sub {
+            my ( $button ) = @_;
+            return unless $button->get_active;
+
+            goto &$code;
+         },
+      );
+
+      $button->set_group( $group ) if $group;
+      $group //= $button->get_group;
+   }
+}
+
 my %COLTYPES; BEGIN { %COLTYPES = (
    int  => { store_type => "Glib::Int",    renderer => "Gtk2::CellRendererText",   attr => "text"   },
    text => { store_type => "Glib::String", renderer => "Gtk2::CellRendererText",   attr => "text"   },
@@ -649,6 +685,8 @@ sub Devel::MAT::UI::set_svlist_column_values
       progress( sprintf "Loading GTK TreeView %d of %d (%.2f%%)",
          $count, $total, $count*100 / $total ) if ($count % 1000) == 0;
    }
+
+   progress( "Done" );
 }
 
 sub Devel::MAT::UI::provides_sv_detail

@@ -8,7 +8,7 @@ package Devel::MAT::Tool::Inrefs;
 use strict;
 use warnings;
 
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 use List::Util qw( pairmap pairs );
 
@@ -104,7 +104,7 @@ sub Devel::MAT::SV::_inrefs
    foreach ( pairs @{ $self->{tool_inrefs} } ) {
       my ( $name, $addr ) = @$_;
 
-      if( $addr and $addr =~ m/^\d+$/ ) {
+      if( wantarray and $addr and $addr =~ m/^\d+$/ ) {
          my $sv = $df->sv_at( $addr );
          if( $sv ) {
             push @inrefs, $name, $sv;

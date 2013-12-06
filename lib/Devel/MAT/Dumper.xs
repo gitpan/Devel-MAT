@@ -613,7 +613,7 @@ static void write_sv(FILE *fh, const SV *sv)
 /*
  * This won't be very good, but good enough for our needs
  */
-static I32 dopoptosub_at(pTHX_ const PERL_CONTEXT *cxstk, I32 startingblock)
+static I32 dopoptosub_at(const PERL_CONTEXT *cxstk, I32 startingblock)
 {
   dVAR;
   I32 i;

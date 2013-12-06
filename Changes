@@ -1,5 +1,18 @@
 Revision history for Devel-MAT
 
+0.13    2013/12/06 21:37:35
+        [CHANGES]
+         * Performance improvement to inrefs counting
+         * Added Sizes tool - calculates structure and owned set and sizes
+         * Allow Tools to declare UI radiobutton sets
+         * Improved Tools ability to interact with the SV list
+         * Disable Tools menu items for loaded tools to avoid loading them
+           twice
+
+        [BUGFIXES]
+         * Add List::UtilsBy to requirements
+         * Our version of dopoptosub_at() doesn't need aTHX_
+
 0.12    2013/12/03 15:18:43
         [CHANGES]
          * Classify outrefs and inrefs into various kinds

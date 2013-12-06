@@ -3,6 +3,7 @@ bin/pmat-count
 bin/pmat-dump-symbols
 bin/pmat-explore-gtk
 bin/pmat-identify-sv
+bin/pmat-largest-svs
 bin/pmat-list-dangling-ptrs
 bin/pmat-list-orphans
 bin/pmat-show-sv
@@ -19,6 +20,7 @@ lib/Devel/MAT/Tool.pod
 lib/Devel/MAT/Tool/Count.pm
 lib/Devel/MAT/Tool/Inrefs.pm
 lib/Devel/MAT/Tool/Reachability.pm
+lib/Devel/MAT/Tool/Sizes.pm
 lib/Devel/MAT/UI.pod
 LICENSE
 Makefile.PL
@@ -36,6 +38,9 @@ share/icons/reachable-yes.svg
 share/icons/refs-All.svg
 share/icons/refs-Direct.svg
 share/icons/refs-Strong.svg
+share/icons/size-Owned.svg
+share/icons/size-Structure.svg
+share/icons/size-SV.svg
 share/icons/type-ARRAY.svg
 share/icons/type-CODE.svg
 share/icons/type-FORMAT.svg
@@ -55,4 +60,5 @@ t/01self.t
 t/02contexts.t
 t/10tool-inrefs.t
 t/10tool-reachability.t
+t/10tool-sizes.t
 t/99pod.t

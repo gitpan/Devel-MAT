@@ -32,7 +32,37 @@ relative to the share directory of the package, managed by L<File::ShareDir>.
 
 =back
 
-=head2 $columm = Devel::MAT::UI->provides_svlist_column( type => ..., title => ... )
+=head2 Devel::MAT::UI->provides_radiobutton_set( @buttons )
+
+A tool may call this to declare that it wishes to have a set of radiobuttons
+as a choice of options to be displayed in the toolbar of the user interface.
+Each button is specified in a HASH reference in the C<@buttons> list
+containing the following keys:
+
+=over 4
+
+=item text => STRING
+
+The text to display on the button
+
+=item icon => STRING
+
+The name of the previously-registered icon to display with the button
+
+=item tooltip => STRING
+
+Descriptive text to associate with the button to further explain it
+
+=item code => CODE
+
+A code reference to invoke when the button is activated.
+
+=back
+
+The buttons will be displayed in a group of their own, such that selecting one
+will deactivate all the others in the same set.
+
+=head2 $column = Devel::MAT::UI->provides_svlist_column( type => ..., title => ... )
 
 A tool may call this to declare that it wishes to provide a new column to
 display in the main SV list on the user interface. It returns an opaque column
@@ -51,10 +81,27 @@ The title to display in the column header.
 
 =back
 
+=head2 Devel::MAT::UI->COLUMN_TYPE
+
+=head2 Devel::MAT::UI->COLUMN_ADDR
+
+=head2 Devel::MAT::UI->COLUMN_DESC
+
+=head2 Devel::MAT::UI->COLUMN_SIZE
+
+=head2 Devel::MAT::UI->COLUMN_BLESSED
+
+=head2 Devel::MAT::UI->COLUMN_OUTREFS
+
+=head2 Devel::MAT::UI->COLUMN_INREFS
+
+Opaque column values to represent the predefined SV list columns.
+
 =head2 Devel::MAT::UI->set_svlist_column_values( column => $column, from => $from )
 
 A tool may call this to provide the values to display in the SV list column it
-earlier created by calling C<provides_svlist_column>.
+earlier created by calling C<provides_svlist_column>, or to replace the values
+in any of the predefined columns.
 
 =over 4
 

@@ -12,6 +12,7 @@ my $build = Module::Build->new(
    requires => {
       'File::ShareDir' => 0,
       'List::Util' => '1.29', # pair* functions
+      'List::UtilsBy' => 0,   # sort_by
       'Module::Pluggable' => 0,
       'perl' => '5.010',      # various XS failures on 5.8
    },

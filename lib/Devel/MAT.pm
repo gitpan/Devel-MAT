@@ -8,7 +8,7 @@ package Devel::MAT;
 use strict;
 use warnings;
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 use Carp;
 use List::Util qw( pairs );
@@ -19,6 +19,9 @@ use Module::Pluggable
    sub_name => "_available_tools",
    search_path => [ "Devel::MAT::Tool" ],
    require => 1;
+
+require XSLoader;
+XSLoader::load( __PACKAGE__, $VERSION );
 
 =head1 NAME
 

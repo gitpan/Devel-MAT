@@ -195,14 +195,12 @@ An SV:
      type: GVIX
        UINT PADIX
 
-     type: PADNAME  == Only seen on 5.18+
-       UINT PADIX
-       STR  NAME
+     type: PADNAMES
+       PTR  PADNAMES
 
-     type: PADSV    == Only seen on 5.18+
+     type: PAD
        UINT DEPTH
-       UINT PADIX
-       PTR  SV
+       PTR  PAD
 
   type: IO
     PTRs(3):

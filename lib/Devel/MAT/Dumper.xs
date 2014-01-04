@@ -19,6 +19,15 @@
 #  define SvOOK_offset(sv, len) STMT_START { len = SvIVX(sv); } STMT_END
 #endif
 
+#ifndef CxHASARGS
+#  define CxHASARGS(cx) ((cx)->blk_sub.hasargs)
+#endif
+
+/* This technically applies all the way back to 5.6 if we need it... */
+#if (PERL_REVISION == 5) && (PERL_VERSION == 10) && (PERL_SUBVERSION == 0)
+#  define CxOLD_OP_TYPE(cx) ((cx)->blk_eval.old_op_type)
+#endif
+
 static int max_string;
 
 #if NVSIZE == 8
@@ -67,9 +76,9 @@ enum PMAT_CODEx {
   PMAT_CODEx_CONSTIX,
   PMAT_CODEx_GVSV,
   PMAT_CODEx_GVIX,
-  PMAT_CODEx_PADNAME,
-  PMAT_CODEx_PADSV,
-  PMAT_CODEx_PADNAMES,
+  /* PMAT_CODEx_PADNAME was 5 */
+  /* PMAT_CODEx_PADSV was 6 */
+  PMAT_CODEx_PADNAMES = 7,
   PMAT_CODEx_PAD,
 };
 
@@ -483,29 +492,12 @@ static void write_private_cv(FILE *fh, const CV *cv)
     write_u8(fh, PMAT_CODEx_PADNAMES);
     write_svptr(fh, (SV*)PadlistNAMES(padlist));
 
-    for(i = 0; i <= PadlistNAMESMAX(padlist); i++) {
-      write_u8(fh, PMAT_CODEx_PADNAME);
-      write_uint(fh, i);
-      if(names[i] && PadnamePV(names[i]))
-        write_str(fh, PadnamePV(names[i]));
-      else
-        write_uint(fh, -1);
-    }
-
     for(depth = 1; depth <= PadlistMAX(padlist); depth++) {
       PAD *pad = pads[depth];
-      SV **svs = PadARRAY(pad);
 
       write_u8(fh, PMAT_CODEx_PAD);
       write_uint(fh, depth);
       write_svptr(fh, (SV*)pad);
-
-      for(i = 1; i <= PadMAX(pad); i++) {
-        write_u8(fh, PMAT_CODEx_PADSV);
-        write_uint(fh, depth);
-        write_uint(fh, i);
-        write_svptr(fh, svs[i]);
-      }
     }
   }
 #endif

@@ -1,5 +1,17 @@
 Revision history for Devel-MAT
 
+0.14    2014/01/04 20:25:16
+        [CHANGES]
+         * Move much core data storage into XS structs, for reduced memory
+           consumption of analyser and some CPU performance gains
+         * Display human-readable size information in GTK explorer
+         * Added a size totals summary commandline tool
+         * Improved recursion logic in Inrefs tool; avoids multiple recursions
+           into shared structures
+
+        [BUGFIXES]
+         * Fix for 5.10.0
+
 0.13    2013/12/06 21:37:35
         [CHANGES]
          * Performance improvement to inrefs counting

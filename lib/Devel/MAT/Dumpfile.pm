@@ -1,14 +1,14 @@
 #  You may distribute under the terms of either the GNU General Public License
 #  or the Artistic License (the same terms as Perl itself)
 #
-#  (C) Paul Evans, 2013 -- leonerd@leonerd.org.uk
+#  (C) Paul Evans, 2013-2014 -- leonerd@leonerd.org.uk
 
 package Devel::MAT::Dumpfile;
 
 use strict;
 use warnings;
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 use Carp;
 use IO::Handle;   # ->read
@@ -201,7 +201,7 @@ sub load
 
       my $pos = $fh->IO::Seekable::tell; # fully-qualified method for 5.010
       $progress->( sprintf "Loading file %d of %d (%.2f%%)",
-         $pos, $filelen, 100*$pos / $filelen ) if $progress and (keys(%heap) % 1000) == 0;
+         $pos, $filelen, 100*$pos / $filelen ) if $progress and (keys(%heap) % 5000) == 0;
    }
 
    # Contexts
@@ -243,7 +243,7 @@ sub _fixup
 
       $count++;
       $progress->( sprintf "Fixing %d of %d (%.2f%%)",
-         $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 1000) == 0;
+         $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 5000) == 0;
    }
 
    # Now annotate the protosubs for closures
@@ -253,13 +253,13 @@ sub _fixup
 
       if( $sv->type eq "CODE" and $sv->oproot and $sv->is_cloned ) {
          if( my $protosub = $protosub_by_oproot{$sv->oproot} ) {
-            $sv->_set_protosub( $protosub->addr );
+            $sv->_set_protosub_at( $protosub->addr );
          }
       }
 
       $count++;
       $progress->( sprintf "Setting protosubs %d of %d (%.2f%%)",
-         $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 1000) == 0;
+         $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 5000) == 0;
    }
 
    return $self;

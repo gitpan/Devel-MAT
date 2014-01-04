@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 use constant FOR_UI => 1;
 
@@ -131,46 +131,55 @@ sub mark_reachable
 
    # First, walk the symbol table
    {
-      my @queue = ( $df->defstash );
+      my @symtab = ( $df->defstash );
+      $symtab[0]->{tool_reachable} = REACH_SYMTAB;
+
       my $count = 0;
-      while( @queue ) {
-         my $stash = shift @queue;
+      while( @symtab ) {
+         my $stash = shift @symtab;
          $stash->type eq "STASH" or die "ARGH! Encountered non-stash ".$stash->desc_addr;
 
-         $stash->{tool_reachable} = REACH_SYMTAB;
+         my @more_symtab;
+         my @more_user;
 
          foreach my $key ( $stash->keys ) {
             my $value = $stash->value( $key );
 
             # Keys ending :: signify sub-stashes
             if( $key =~ m/::$/ ) {
-               $value->{tool_reachable} = REACH_SYMTAB;
-               push @queue, $value->hash unless $value->hash->{tool_reachable};
+               push @more_symtab, $value->hash;
             }
             # Otherwise it might be a glob
             elsif( $value->type eq "GLOB" ) {
                my $gv = $value;
                $gv->{tool_reachable} = REACH_SYMTAB;
 
-               defined $_ and push @user, $_ for
+               defined $_ and push @more_user, $_ for
                   $gv->scalar, $gv->array, $gv->hash, $gv->code, $gv->io, $gv->form;
             }
             # Otherwise it might be a SCALAR/ARRAY/HASH directly in the STASH
             else {
-               push @user, $value;
+               push @more_user, $value;
             }
 
             $count++;
             $progress->( sprintf "Walking symbol table %d...", $count ) if $progress and $count % 1000 == 0;
          }
 
-         push @internal,
-            $stash->backrefs,
-            $stash->mro_linearall,
-            $stash->mro_linearcurrent,
-            $stash->mro_nextmethod,
-            $stash->mro_isa,
-            grep { defined } pairvalues $stash->magic;
+         !$_->{tool_reachable} and
+            $_->{tool_reachable} = REACH_SYMTAB, push @symtab, $_ for @more_symtab;
+
+         !$_->{tool_reachable} and
+            $_->{tool_reachable} = REACH_USER, push @user, $_ for @more_user;
+
+         !$_->{tool_reachable} and
+            $_->{tool_reachable} = REACH_INTERNAL, push @internal, $_ for
+               $stash->backrefs,
+                $stash->mro_linearall,
+                $stash->mro_linearcurrent,
+                $stash->mro_nextmethod,
+                $stash->mro_isa,
+                grep { defined } pairvalues $stash->magic;
 
          $count++;
          $progress->( sprintf "Walking symbol table %d...", $count ) if $progress and $count % 1000 == 0;
@@ -179,40 +188,44 @@ sub mark_reachable
 
    # Next the reachable user data, recursively
    {
-      my @queue = ( @user, $df->main_cv );
+      push @user, $df->main_cv;
       my $count = 0;
-      while( @queue ) {
-         my $sv = shift @queue or next;
-         $sv->{tool_reachable} ||= REACH_USER;
+      while( @user ) {
+         my $sv = shift @user or next;
 
-         my @more;
+         my @more_user;
+         my @more_internal;
+
          given( $sv->type ) {
-            when( "REF" )    { push @more, $sv->rv if $sv->rv }
-            when( "ARRAY" )  { push @more, $sv->elems; }
-            when( "HASH" )   { push @more, $sv->values; }
+            when( "REF" )    { push @more_user, $sv->rv if $sv->rv }
+            when( "ARRAY" )  { push @more_user, $sv->elems; }
+            when( "HASH" )   { push @more_user, $sv->values; }
             when( "GLOB" ) {
                # Any user GLOBs we find should just be IO refs
                my $gv = $sv;
                $gv->io or warn "Found a user GLOB that isn't an IO ref";
-               $gv->{tool_reachable} = REACH_USER;
+               $gv->{tool_reachable} = REACH_USER; # no @more
             }
             when( "CODE" ) {
                my $cv = $sv;
 
-               $cv->padlist and $cv->padlist->{tool_reachable} = REACH_PADLIST;
+               my @more_padlist;
+               my @more_lexical;
+
+               push @more_padlist, $cv->padlist;
 
                my $padnames = $cv->padnames;
                if( $padnames ) {
-                  $_ and $_->{tool_reachable} = REACH_PADLIST for $padnames, $padnames->elems;
+                  push @more_padlist, $padnames, $padnames->elems;
                }
 
                foreach my $pad ( $cv->pads ) {
                   $pad or next;
-                  $pad->{tool_reachable} = REACH_PADLIST;
+                  push @more_padlist, $pad;
 
                   # PAD slot 0 is always @_
                   if( my $argsav = $pad->elem( 0 ) ) {
-                     $argsav->{tool_reachable} = REACH_INTERNAL;
+                     push @more_internal, $argsav;
                   }
 
                   foreach my $padix ( 1 .. $pad->elems-1 ) {
@@ -220,41 +233,50 @@ sub mark_reachable
                      my $padname = $padname_sv && $padname_sv->type eq "SCALAR" ?
                         $padname_sv->pv : undef;
 
-                     my $sv = $pad->elem( $padix ) or next;
-                     $sv->immortal and next;
+                     my $padsv = $pad->elem( $padix ) or next;
+                     $padsv->immortal and next;
 
                      if( $padname and $padname eq "&" ) {
                         # Slots named "&" are closure prototype subs
-                        push @more, $sv;
+                        push @more_user, $padsv;
                      }
                      elsif( $padname ) {
                         # Other named slots are lexical vars
-                        $sv->{tool_reachable} = REACH_LEXICAL;
-                        push @queue, $sv;
+                        push @more_lexical, $padsv;
                      }
                      else {
                         # Unnamed slots are just part of the padlist
-                        push @internal, $sv;
+                        push @more_internal, $padsv;
                      }
                   }
                }
 
-               $_ and push @more, $_ for
+               $_ and push @more_user, $_ for
                   $cv->scope, $cv->constval, $cv->constants, $cv->globrefs;
+
+               $_ and !$_->{tool_reachable} and
+                  $_->{tool_reachable} = REACH_PADLIST for @more_padlist;
+
+               $_ and !$_->{tool_reachable} and
+                  $_->{tool_reachable} = REACH_LEXICAL, push @user, $_ for @more_lexical;
             }
             when( "LVALUE" ) {
                my $lv = $sv;
 
-               push @internal, $lv->target if $lv->target;
+               push @more_internal, $lv->target if $lv->target;
             }
             when([ "SCALAR", "IO", "REGEXP", "FORMAT" ]) { } # ignore
 
             default { warn "Not sure what to do with user data item ".$sv->desc_addr."\n"; }
          }
 
-         push @queue, grep { $_ and !$_->{tool_reachable} and !$_->immortal } @more;
+         $_ and !$_->{tool_reachable} and !$_->immortal and
+            $_->{tool_reachable} = REACH_USER, push @user, $_ for @more_user;
 
-         push @internal, grep { defined } pairvalues $sv->magic;
+         $_ and !$_->{tool_reachable} and !$_->immortal and
+            $_->{tool_reachable} = REACH_INTERNAL, push @internal, $_ for
+               @more_internal,
+               grep { defined } pairvalues $sv->magic;
 
          $count++;
          $progress->( sprintf "Marking user reachability %d...", $count ) if $progress and $count % 1000 == 0;
@@ -263,15 +285,15 @@ sub mark_reachable
 
    # Finally internals
    {
-      my @queue = ( @internal, pairvalues $df->roots );
+      push @internal, pairvalues $df->roots;
       my $count = 0;
-      while( @queue ) {
-         my $sv = shift @queue or next;
+      while( @internal ) {
+         my $sv = shift @internal or next;
          next if $sv->{tool_reachable};
 
          $sv->{tool_reachable} = REACH_INTERNAL;
 
-         push @queue, grep { defined } pairvalues $sv->outrefs;
+         push @internal, grep { defined } pairvalues $sv->outrefs;
 
          $count++;
          $progress->( sprintf "Marking internal reachability %d...", $count ) if $progress and $count % 1000 == 0;

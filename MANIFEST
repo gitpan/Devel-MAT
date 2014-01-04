@@ -7,10 +7,12 @@ bin/pmat-largest-svs
 bin/pmat-list-dangling-ptrs
 bin/pmat-list-orphans
 bin/pmat-show-sv
+bin/pmat-sizes
 Build.PL
 Changes
 doc/format.txt
 lib/Devel/MAT.pm
+lib/Devel/MAT.xs
 lib/Devel/MAT/Context.pm
 lib/Devel/MAT/Dumper.pm
 lib/Devel/MAT/Dumper.xs

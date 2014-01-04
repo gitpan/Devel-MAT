@@ -1,14 +1,14 @@
 #  You may distribute under the terms of either the GNU General Public License
 #  or the Artistic License (the same terms as Perl itself)
 #
-#  (C) Paul Evans, 2013 -- leonerd@leonerd.org.uk
+#  (C) Paul Evans, 2013-2014 -- leonerd@leonerd.org.uk
 
 package Devel::MAT::Tool::Inrefs;
 
 use strict;
 use warnings;
 
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 
 use List::Util qw( pairmap pairs );
 
@@ -53,7 +53,7 @@ sub patch_inrefs
 
       $count++;
       $progress->( sprintf "Patching refs in %d of %d (%.2f%%)",
-         $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 200) == 0
+         $count, $heap_total, 100*$count / $heap_total ) if $progress and ($count % 2000) == 0
    }
 
    foreach ( pairs $df->_roots ) {
@@ -99,7 +99,7 @@ sub Devel::MAT::SV::_inrefs
 
    $self->{tool_inrefs} ||= [];
 
-   my $df = $self->{df};
+   my $df = $self->df;
    my @inrefs;
    foreach ( pairs @{ $self->{tool_inrefs} } ) {
       my ( $name, $addr ) = @$_;

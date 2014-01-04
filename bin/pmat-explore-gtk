@@ -280,11 +280,30 @@ sub add_svlist_column
    $svlist_view->append_column( $column );
 }
 
+sub bytes2size
+{
+   my ( $bytes ) = @_;
+
+   if( $bytes < 1024 ) {
+      return $bytes
+   }
+   if( $bytes < 1024**2 ) {
+      return sprintf "%.1f Ki", $bytes / 1024;
+   }
+   if( $bytes < 1024**3 ) {
+      return sprintf "%.1f Mi", $bytes / 1024**2;
+   }
+   if( $bytes < 1024**4 ) {
+      return sprintf "%.1f Gi", $bytes / 1024**3;
+   }
+   return sprintf "%.1f Ti", $bytes / 1024**4;
+}
+
 # First two columns are special
 $svlist_view->insert_column_with_data_func( -1, " ",
    Gtk2::CellRendererPixbuf->new, sub {
       my ( $column, $renderer, $model, $iter ) = @_;
-      my $type = $model->get( $iter, 0 );
+      my $type = $model->get( $iter, Devel::MAT::UI->COLUMN_TYPE );
       my $icon = $ICONS{"type-$type"} or warn "No icon for type $type";
 
       $renderer->set( pixbuf => $icon ) if $icon;
@@ -293,17 +312,26 @@ $svlist_view->insert_column_with_data_func( -1, " ",
 $svlist_view->insert_column_with_data_func( -1, "Address",
    Gtk2::CellRendererText->new, sub {
       my ( $column, $renderer, $model, $iter ) = @_;
-      my $addr = $model->get( $iter, 1 );
+      my $addr = $model->get( $iter, Devel::MAT::UI->COLUMN_ADDR );
       $renderer->set( text => sprintf "%#x", $addr );
    }, undef
 );
-$svlist_view->get_column( $_ )->set_sort_column_id( $_ ) for 0 .. 1;
 
 add_svlist_column title => "Description", idx => 2;
-add_svlist_column title => "Size",        idx => 3;
+
+$svlist_view->insert_column_with_data_func( -1, "Size",
+   Gtk2::CellRendererText->new, sub {
+      my ( $column, $renderer, $model, $iter ) = @_;
+      my $bytes = $model->get( $iter, Devel::MAT::UI->COLUMN_SIZE );
+      $renderer->set( text => bytes2size $bytes );
+   }, undef
+);
+
 add_svlist_column title => "Blessed",     idx => 4;
 add_svlist_column title => "Outrefs",     idx => 5;
 add_svlist_column title => "Inrefs",      idx => 6;
+
+$svlist_view->get_column( $_ )->set_sort_column_id( $_ ) for 0, 1, 3;
 
 $pane->add1( vscrollable( $svlist_view ) );
 
@@ -399,7 +427,11 @@ sub display_sv
 
    table_add( "SvREFCNT" => label( $sv->refcnt ), undef, 2 );
 
-   table_add( "Size" => label( $sv->size ), undef, 2 );
+   my $sizestr = $sv->size;
+   if( $sv->size > 1024 ) {
+      $sizestr = bytes2size( $sv->size ) . " ($sizestr)";
+   }
+   table_add( "Size" => label( $sizestr ), undef, 2 );
 
    table_add( "Description" => label( $sv->desc ) );
 

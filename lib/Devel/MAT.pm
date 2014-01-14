@@ -8,7 +8,7 @@ package Devel::MAT;
 use strict;
 use warnings;
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 use Carp;
 use List::Util qw( pairs );
@@ -122,7 +122,7 @@ sub load_tool
    return $self->{tools}{$name} ||= $tool_class->new( $self, %args );
 }
 
-=head2 @text = $pmat->identify( $sv )
+=head2 @text = $pmat->identify( $sv, %opts )
 
 Traces the tree of inrefs from C<$sv> back towards the known roots, returning
 a textual description as a list of lines of text.
@@ -132,12 +132,33 @@ the paths from the given SV back to the roots.
 
 This method will load L<Devel::MAT::Tool::Inrefs> if it isn't yet loaded.
 
+The following named options are recognised:
+
+=over 4
+
+=item depth => INT
+
+If specified, stop recursing after the specified count. A depth of 1 will only
+print immediately referring SVs, 2 will print the referrers of those, etc.
+
+=item strong => BOOL
+
+=item direct => BOOL
+
+Specifies the type of inrefs followed. By default all inrefs are followed.
+Passing C<strong> will follow only strong direct inrefs. Passing C<direct>
+will follow only direct inrefs.
+
+=back
+
 =cut
 
 sub identify
 {
    my $self = shift;
-   my ( $sv, $seen ) = @_;
+   my ( $sv, %opts ) = @_;
+
+   my $seen = $opts{seen} //= {};
 
    $self->load_tool( "Inrefs" );
 
@@ -153,10 +174,12 @@ sub identify
       return $name if $root and $svaddr == $root->addr;
    }
 
-   $seen ||= { $sv->addr => 1 };
+   $seen->{$svaddr} = 1;
 
    my @ret = ();
-   my %inrefs = $sv->inrefs;
+   my %inrefs = $opts{strong} ? $sv->inrefs_strong :
+                $opts{direct} ? $sv->inrefs_direct :
+                                $sv->inrefs;
    foreach my $desc ( sort keys %inrefs ) {
       my $ref = $inrefs{$desc};
 
@@ -172,11 +195,14 @@ sub identify
       elsif( $seen->{$ref->addr} ) {
          @me = "already found";
       }
-      else {
-         @me = $self->identify( $ref, $seen );
+      elsif( !defined $opts{depth} or $opts{depth} ) {
+         $seen->{$ref->addr}++;
+         @me = ( defined $opts{depth} ) ? $self->identify( $ref, %opts, depth => $opts{depth}-1 )
+                                        : $self->identify( $ref, %opts );
       }
-
-      $seen->{$ref->addr}++;
+      else {
+         @me = "not found at this depth";
+      }
 
       push @ret,
          sprintf( "%s of %s, which is:", $desc, $ref->desc_addr ),

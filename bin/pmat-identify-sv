@@ -4,6 +4,13 @@ use strict;
 use warnings;
 
 use Devel::MAT;
+use Getopt::Long;
+
+GetOptions(
+   'depth|d=i' => \my $DEPTH,
+   'strong'    => \my $STRONG,
+   'direct'    => \my $DIRECT,
+) or exit 1;
 
 my $pmat = Devel::MAT->load( $ARGV[0] // die "Need dumpfile\n" );
 my $addr = $ARGV[1] // die "Need an SV addr\n";
@@ -11,4 +18,8 @@ $addr = hex $addr if $addr =~ m/^0x/;
 
 my $df = $pmat->dumpfile;
 
-print "$_\n" for $pmat->identify( $df->sv_at( $addr ) );
+print "$_\n" for $pmat->identify( $df->sv_at( $addr ),
+   depth => $DEPTH,
+   strong => $STRONG,
+   direct => $DIRECT,
+);

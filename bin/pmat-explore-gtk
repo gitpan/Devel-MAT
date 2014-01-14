@@ -452,9 +452,11 @@ sub display_sv
    given( $type ) {
       when( "CODE" ) {
          table_add( "Flags", label( join( " ",
-                  ( $sv->is_clone  ? "CLONE"  : () ),
-                  ( $sv->is_cloned ? "CLONED" : () ),
-                  ( $sv->is_xsub   ? "XSUB"   : () ) ) ) );
+                  ( $sv->is_clone       ? "CLONE"       : () ),
+                  ( $sv->is_cloned      ? "CLONED"      : () ),
+                  ( $sv->is_xsub        ? "XSUB"        : () ),
+                  ( $sv->is_weakoutside ? "WEAKOUTSIDE" : () ),
+                  ( $sv->is_cvgv_rc     ? "CVGV_RC"     : () ) ) ) );
          table_add( "Oproot", label( sprintf "%x (%d)", $sv->oproot, $sv->oproot ) ) if $sv->oproot;
       }
       when( "SCALAR" ) {

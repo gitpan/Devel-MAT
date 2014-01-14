@@ -1,14 +1,16 @@
 #  You may distribute under the terms of either the GNU General Public License
 #  or the Artistic License (the same terms as Perl itself)
 #
-#  (C) Paul Evans, 2013 -- leonerd@leonerd.org.uk
+#  (C) Paul Evans, 2013-2014 -- leonerd@leonerd.org.uk
 
 package Devel::MAT::Dumper;
 
 use strict;
 use warnings;
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
+
+use File::Basename qw( basename );
 
 require XSLoader;
 XSLoader::load( __PACKAGE__, $VERSION );
@@ -67,7 +69,7 @@ times.
 
 =head2 -file $PATH
 
-Sets the name of the file which is automatically dumped; defaults to
+Sets the name of the file which is automatically dumped; defaults to basename
 F<$0.pmat> if not supplied.
 
  $ perl -MDevel::MAT::Dumper=-file,foo.pmat ...
@@ -78,23 +80,39 @@ Sets the maximum length of string buffer to dump from PVs; defaults to 256 if
 not supplied. Use a negative size to dump the entire buffer of every PV
 regardless of size.
 
+=head2 -eager_open
+
+Opens the dump file immediately at C<import> time, instead of waiting until
+the time it actually writes the heap dump. This may be useful if the process
+changes working directory or user ID, or to debug problems involving too many
+open filehandles.
+
 =cut
 
 our $MAX_STRING = 256; # used by XS code
 
-my $dumpfile_name = "$0.pmat";
+my $dumpfile_name = basename( $0 ) . ".pmat";
+my $dumpfh;
 
 my $dump_at_END;
 END {
    return unless $dump_at_END;
 
    print STDERR "Dumping to $dumpfile_name because of END\n";
-   Devel::MAT::Dumper::dump( $dumpfile_name );
+
+   if( $dumpfh ) {
+      Devel::MAT::Dumper::dumpfh( $dumpfh );
+   }
+   else {
+      Devel::MAT::Dumper::dump( $dumpfile_name );
+   }
 }
 
 sub import
 {
    my $pkg = shift;
+
+   my $eager_open;
 
    while( @_ ) {
       my $sym = shift;
@@ -122,11 +140,34 @@ sub import
       elsif( $sym eq "-max_string" ) {
          $MAX_STRING = shift;
       }
+      elsif( $sym eq "-eager_open" ) {
+         $eager_open++;
+      }
       else {
          die "Unrecognised $pkg import symbol $sym\n";
       }
    }
+
+   if( $eager_open ) {
+      open $dumpfh, ">", $dumpfile_name or
+         die "Cannot open $dumpfile_name for writing - $!\n";
+   }
 }
+
+=head1 FUNCTIONS
+
+These functions are not exported, they must be called fully-qualified.
+
+=head2 dump( $path )
+
+Writes a heap dump to the named file
+
+=head2 dumpfh( $fh )
+
+Writes a heap dump to the given filehandle (which must be a plain OS-level
+filehandle, though does not need to be a regular file, or seekable).
+
+=cut
 
 =head1 AUTHOR
 

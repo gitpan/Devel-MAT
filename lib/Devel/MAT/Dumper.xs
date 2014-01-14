@@ -1,7 +1,7 @@
 /*  You may distribute under the terms of either the GNU General Public License
  *  or the Artistic License (the same terms as Perl itself)
  *
- *  (C) Paul Evans, 2013 -- leonerd@leonerd.org.uk
+ *  (C) Paul Evans, 2013-2014 -- leonerd@leonerd.org.uk
  */
 
 #include "EXTERN.h"
@@ -664,6 +664,8 @@ static const PERL_CONTEXT *caller_cx(int count, void *ignore)
 
 static void dumpfh(FILE *fh)
 {
+  max_string = SvIV(get_sv("Devel::MAT::Dumper::MAX_STRING", GV_ADD));
+
   // Header
   fwrite("PMAT", 4, 1, fh);
 
@@ -900,8 +902,6 @@ static void dump(char *file)
   if(!fh)
     croak("Cannot open %s for writing - %s", file, strerror(errno));
 
-  max_string = SvIV(get_sv("Devel::MAT::Dumper::MAX_STRING", GV_ADD));
-
   dumpfh(fh);
   fclose(fh);
 }
@@ -910,3 +910,6 @@ MODULE = Devel::MAT::Dumper        PACKAGE = Devel::MAT::Dumper
 
 void
 dump(char *file)
+
+void
+dumpfh(FILE *fh)

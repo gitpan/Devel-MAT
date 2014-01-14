@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 use constant FOR_UI => 1;
 

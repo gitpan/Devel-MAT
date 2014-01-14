@@ -1,5 +1,16 @@
 Revision history for Devel-MAT
 
+0.15    2014/01/14 11:12:37
+        [CHANGES]
+         * Remember to basename() $0 for default dumpfile name
+         * Added -eager_option import option
+         * Added $df->roots_strong
+         * Added options to $pmat->identify and pmat-identify-sv command
+
+        [BUGFIXES]
+         * Avoid infinite loop in $pmat->identify in cyclic cases
+         * Fix docs on ->rv method (RT92122)
+
 0.14    2014/01/04 20:25:16
         [CHANGES]
          * Move much core data storage into XS structs, for reduced memory

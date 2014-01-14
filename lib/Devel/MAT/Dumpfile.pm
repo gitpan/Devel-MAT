@@ -8,7 +8,7 @@ package Devel::MAT::Dumpfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 
 use Carp;
 use IO::Handle;   # ->read
@@ -471,6 +471,11 @@ sub ithreads
 
 Returns a key/value pair list giving the names and SVs at each of the roots.
 
+=head2 %roots = $df->roots_strong
+
+Returns a key/value pair list giving the names and SVs at each of the roots
+that count as strong references.
+
 =cut
 
 sub _roots
@@ -483,6 +488,12 @@ sub roots
 {
    my $self = shift;
    return pairmap { substr( $a, 1 ) => $b } $self->_roots;
+}
+
+sub roots_strong
+{
+   my $self = shift;
+   return pairmap { $a =~ m/^\+(.*)/ ? ( $1 => $b ) : () } $self->_roots;
 }
 
 =head2 $sv = $df->ROOT

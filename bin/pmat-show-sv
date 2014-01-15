@@ -6,6 +6,7 @@ use feature qw( say switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
 use Devel::MAT;
+use List::Util qw( max );
 
 sub show_sv
 {
@@ -41,7 +42,7 @@ sub show_sv
       }
       when( "ARRAY" ) {
          my @elems = $sv->elems;
-         say "  [$_]=" . $elems[$_]->desc_addr for 0 .. $#elems;
+         say "  [$_]=" . ( $elems[$_] ? $elems[$_]->desc_addr : "NULL" ) for 0 .. $#elems;
       }
       when([ "HASH", "STASH" ]) {
          if( $type eq "STASH" ) {
@@ -53,17 +54,66 @@ sub show_sv
          }
       }
       when( "CODE" ) {
-         say $sv->stash ? "  stash=" . $sv->stash->desc_addr : "  no stash";
-         say $sv->glob  ? "  glob="  . $sv->glob->desc_addr  : "  no glob";
-         say "  file=" . $sv->file;
-         say $sv->scope ? "  scope=" . $sv->scope->desc_addr : "  no scope";
+         say $sv->name    ? "  name=" . $sv->name : "  no name";
+         say $sv->stash   ? "  stash=" . $sv->stash->desc_addr : "  no stash";
+         say $sv->glob    ? "  glob="  . $sv->glob->desc_addr  : "  no glob";
+         say                "  location=" . $sv->location;
+         say $sv->scope   ? "  scope=" . $sv->scope->desc_addr : "  no scope";
+         say $sv->padlist ? "  padlist=" . $sv->padlist->desc_addr : "  no padlist";
+         say $sv->padnames ? "  padnames=" . $sv->padnames->desc_addr : "  no padnames";
 
-         my $depth = $sv->depth;
-         foreach my $depth ( 0 .. $depth-1 ) {
-            say "Lexvars at depth $depth";
-            foreach ( $sv->lexvars( $depth ) ) {
-               my ( $name, $sv ) = @$_;
-               say $sv ? "  $name=" . $sv->desc_addr : "  $name undef";
+         my @pads = $sv->pads;
+         foreach my $depth ( 0 .. $#pads ) {
+            say "  pad[$depth]=" . $pads[$depth]->desc_addr;
+         }
+
+         if( my @globs = $sv->globrefs ) {
+            say "Referenced globs:";
+            say "  " . join( ", ", map { $_->desc_addr } @globs );
+         }
+      }
+      when( "PADNAMES" ) {
+         say $sv->padcv ? "  padcv=" . $sv->padcv->desc_addr : "  no padcv";
+
+         my @elems = $sv->elems;
+         # Every PADNAMES element is either NULL or a SCALAR(PV)
+         # PADIX 0 is always @_
+         foreach my $padix ( 1 .. $#elems ) {
+            my $slot = $elems[$padix];
+            if( $slot and $slot->type eq "SCALAR" ) {
+               say "  [$padix] is " . $slot->pv;
+            }
+            else {
+               say "  [$padix] unused";
+            }
+         }
+      }
+      when( "PAD" ) {
+         my $padcv = $sv->padcv;
+         say $padcv ? "  padcv=" . $padcv->desc_addr : "  no padcv";
+
+         my @elems = $sv->elems;
+         my @padnames = map { $padcv->padname( $_ ) } 0 .. $#elems;
+         my $maxname = max map { defined $_ ? length $_ : 0 } @padnames;
+
+         my %padtype;
+         if( my $gvix = $padcv->{gvix} ) {
+            $padtype{$_} = "GLOB" for @$gvix;
+         }
+         if( my $constix = $padcv->{constix} ) {
+            $padtype{$_} = "CONST" for @$constix;
+         }
+
+         foreach my $padix ( 1 .. $#elems ) {
+            my $padsv = $elems[$padix];
+            if( $padnames[$padix] ) {
+               printf "  [%3d/%*s]=%s\n", $padix, $maxname, $padnames[$padix],
+                  $padsv ? $padsv->desc_addr : "NULL";
+            }
+            else {
+               printf "  [%3d %*s]=%s\n", $padix, $maxname,
+                  $padtype{$padix} // "",
+                  $padsv ? $padsv->desc_addr : "NULL";
             }
          }
       }

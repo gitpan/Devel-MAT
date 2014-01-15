@@ -14,7 +14,8 @@ Header:
                     0x08 : NV is long double
                     0x10 : ithreads
   U8      zero
-  U16BE   FORMATVER 0
+  U8      FORMATVER_MAJOR 0
+  U8      FORMATVER_MINOR 1
   U32     PERLVER   rev<<24 | ver<<16 | sub
 
   U8      NTYPES
@@ -219,6 +220,14 @@ An SV:
   type: REGEXP
 
   type: FORMAT
+
+SV extensions:
+  type: MAGIC (0x80)
+    PTR   SV
+    U8    TYPE
+    U8    FLAGS  0x01 : MGf_REFCOUNTED
+    PTR   MG_OBJ
+    PTR   MG_PTR
 
 Context:
   type==0-terminated list of CTXs

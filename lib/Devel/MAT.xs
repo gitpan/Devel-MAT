@@ -53,6 +53,7 @@ struct pmat_sv_array
 {
   struct pmat_sv _parent;
   int            flags;
+  char           is_backrefs;
   long           n_elems;
   long          *elems_at;
   long           padcv_at;
@@ -537,8 +538,9 @@ CODE:
     struct pmat_sv_array *av = (struct pmat_sv_array *)get_pmat_sv(self);
     long n, i;
 
-    av->flags    = flags;
-    av->padcv_at = 0;
+    av->flags       = flags;
+    av->is_backrefs = 0;
+    av->padcv_at    = 0;
 
     n = AvMAX(elems_at) + 1;
     av->n_elems = n;
@@ -557,6 +559,20 @@ CODE:
     Safefree(av->elems_at);
 
     free_pmat_sv((struct pmat_sv *)av);
+  }
+
+void
+_set_backrefs(self, is_backrefs)
+  HV   *self
+  int   is_backrefs
+CODE:
+  {
+    struct pmat_sv_array *av = (struct pmat_sv_array *)get_pmat_sv(self);
+    av->is_backrefs = !!is_backrefs;
+    if(is_backrefs) {
+      /* All backrefs ARRAYs are always UNREAL */
+      av->flags |= 0x01;
+    }
   }
 
 void
@@ -587,6 +603,17 @@ CODE:
   {
     struct pmat_sv_array *av = (struct pmat_sv_array *)get_pmat_sv(self);
     RETVAL = av ? av->flags & 0x01 : 0;
+  }
+OUTPUT:
+  RETVAL
+
+int
+is_backrefs(self)
+  HV   *self
+CODE:
+  {
+    struct pmat_sv_array *av = (struct pmat_sv_array *)get_pmat_sv(self);
+    RETVAL = av ? av->is_backrefs : 0;
   }
 OUTPUT:
   RETVAL

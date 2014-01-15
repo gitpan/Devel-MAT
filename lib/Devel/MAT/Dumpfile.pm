@@ -8,7 +8,7 @@ package Devel::MAT::Dumpfile;
 use strict;
 use warnings;
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 use Carp;
 use IO::Handle;   # ->read
@@ -57,10 +57,11 @@ foreach (
    [ statgv          => "+the stat GV" ],
    [ statname        => "+the statname SV" ],
    [ tmpsv           => "+the temporary SV" ],
-   [ defgv           => "-the default GV" ],
+   [ defgv           => "+the default GV" ],
    [ argvgv          => "-the ARGV GV" ],
    [ argvoutgv       => "+the argvout GV" ],
    [ argvout_stack   => "+the argvout stack AV" ],
+   [ errgv           => "+the *@ GV" ],
    [ fdpidav         => "+the FD-to-PID mapping AV" ],
    [ preambleav      => "+the compiler preamble AV" ],
    [ modglobalhv     => "+the module data globals HV" ],
@@ -74,7 +75,7 @@ foreach (
    [ registered_mros => "+the registered MROs HV" ],
    [ rs              => "+the IRS" ],
    [ last_in_gv      => "+the last input GV" ],
-   [ ofsgv           => "-the OFS GV" ],
+   [ ofsgv           => "+the OFS GV" ],
    [ defoutgv        => "+the default output GV" ],
    [ hintgv          => "-the hints (%^H) GV" ],
    [ patchlevel      => "+the patch level" ],
@@ -170,7 +171,14 @@ sub load
 
    $self->_read_u8 == 0 or die "Cannot read $path - 'zero' header field is not zero";
 
-   unpack( "S>", $self->_read(2) ) == 0 or die "Cannot read $path - unrecognised file version";
+   $self->_read_u8 == 0 or die "Cannot read $path - format version major unrecognised";
+
+   ( $self->{format_minor} = $self->_read_u8 ) <= 1 or
+      die "Cannot read $path - format version minor unrecognised ($self->{format_minor})";
+
+   if( $self->{format_minor} < 1 ) {
+      warn "Loading an earlier format of dumpfile - SV MAGIC annotations may be incorrect\n";
+   }
 
    $self->{perlver} = $self->_read_u32;
 
@@ -343,10 +351,28 @@ sub _read_sv
 
       if( $type == 0x80 ) {
          # magic
-         my ( $sv_addr, $obj ) = $self->_read_ptrs(2);
-         my $type              = chr $self->_read_u8;
 
-         $self->sv_at( $sv_addr )->more_magic( $type => $obj );
+         # file minor format zero magic had a different layout
+         if( $self->{format_minor} >= 1 ) {
+            my $sv_addr = $self->_read_ptr;
+            my $type    = chr $self->_read_u8;
+            my $flags   = $self->_read_u8;
+            my ( $obj, $ptr ) = $self->_read_ptrs(2);
+
+            my $sv = $self->sv_at( $sv_addr );
+            $sv->more_magic( $type => $flags, $obj, $ptr );
+         }
+         else {
+            my ( $sv_addr, $obj ) = $self->_read_ptrs(2);
+            my $type              = chr $self->_read_u8;
+
+            my $sv = $self->sv_at( $sv_addr );
+
+            # Legacy format didn't have flags, and didn't distinguish obj from ptr
+            # However, the only objs it ever saved were refcounted ones. Lets just
+            # pretend all of them are refcounted objects.
+            $sv->more_magic( $type => 0x01, $obj, 0 );
+         }
          next;
       }
 

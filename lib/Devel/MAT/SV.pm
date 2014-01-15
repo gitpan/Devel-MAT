@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -127,9 +127,17 @@ Returns the address of the SV
 
 Returns the C<SvREFCNT> reference count of the SV
 
+=head2 $count = $sv->refcount_adjusted
+
+Returns the reference count of the SV, adjusted to take account of the fact
+that the C<SvREFCNT> value of the backrefs list of a hash or weakly-referenced
+object is artificially high.
+
 =cut
 
 # XS accessor
+
+sub refcount_adjusted { shift->refcnt }
 
 =head2 $stash = $sv->blessed
 
@@ -159,22 +167,47 @@ target SV.
 
 =cut
 
+# TODO: This interface needs fixing
 sub magic
 {
    my $self = shift;
    return unless my $magic = $self->{magic};
 
    my $df = $self->df;
-   return map { my ( $type, $addr ) = @$_; $type => $df->sv_at( $addr ) } @$magic;
+   return map { my ( $type, undef, $obj_at, $ptr_at ) = @$_;
+                ( $obj_at ? ( $type => $df->sv_at( $obj_at ) ) : () ),
+                ( $ptr_at ? ( $type => $df->sv_at( $ptr_at ) ) : () ) } @$magic;
+}
+
+=head2 $av_or_rv = $sv->backrefs
+
+Returns backrefs SV, which may be an AV containing the back references, or
+if there is only one, the REF SV itself referring to this.
+
+=cut
+
+sub backrefs
+{
+   my $self = shift;
+
+   return undef unless my $magic = $self->{magic};
+
+   foreach my $mg ( @$magic ) {
+      my ( $type, undef, $obj_at ) = @$mg;
+      # backrefs list uses "<" magic type
+      return $self->df->sv_at( $obj_at ) if $type eq "<";
+   }
+
+   return undef;
 }
 
 # internal
 sub more_magic
 {
    my $self = shift;
-   my ( $type, $obj_at ) = @_;
+   my ( $type, $flags, $obj_at, $ptr_at ) = @_;
 
-   push @{ $self->{magic} }, [ $type => $obj_at ];
+   push @{ $self->{magic} }, [ $type => $flags, $obj_at, $ptr_at ];
 }
 
 =head2 %refs = $sv->outrefs
@@ -203,9 +236,15 @@ sub _outrefs_matching
    push @outrefs, "-the bless package", $self->blessed if $self->blessed;
 
    foreach my $mg ( @{ $self->{magic} || [] } ) {
-      my ( $type, $obj_at ) = @$mg;
-      my $obj = $self->df->sv_at( $obj_at );
-      push @outrefs, "+'$type' magic" => $obj if $obj;
+      my ( $type, $flags, $obj_at, $ptr_at ) = @$mg;
+
+      if( my $obj = $self->df->sv_at( $obj_at ) ) {
+         my $reftype = ( $flags & 0x01 ) ? "+" : "-";
+         push @outrefs, "$reftype'$type' magic object" => $obj;
+      }
+      if( my $ptr = $self->df->sv_at( $ptr_at ) ) {
+         push @outrefs, "+'$type' magic pointer" => $ptr;
+      }
    }
 
    @outrefs = pairgrep { $a =~ m/^$match/ } @outrefs if $match;
@@ -267,7 +306,7 @@ boolean true and false. They are
 
 package Devel::MAT::SV::Immortal;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 use constant immortal => 1;
 sub new {
    my $class = shift;
@@ -280,13 +319,13 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::UNDEF;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 sub desc { "UNDEF" }
 sub type { "UNDEF" }
 
 package Devel::MAT::SV::YES;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 sub desc { "YES" }
 sub type { "SCALAR" }
 
@@ -301,7 +340,7 @@ sub name {}
 
 package Devel::MAT::SV::NO;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 sub desc { "NO" }
 sub type { "SCALAR" }
 
@@ -316,7 +355,7 @@ sub name {}
 
 package Devel::MAT::SV::Unknown;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 0xff );
 
 sub desc { "UNKNOWN" }
@@ -325,7 +364,7 @@ sub _outrefs {}
 
 package Devel::MAT::SV::GLOB;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 1 );
 
 =head1 Devel::MAT::SV::GLOB
@@ -456,7 +495,7 @@ sub _outrefs
 
 package Devel::MAT::SV::SCALAR;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 2 );
 
 =head1 Devel::MAT::SV::SCALAR
@@ -586,7 +625,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REF;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 3 );
 
 =head1 Devel::MAT::SV::REF
@@ -657,7 +696,7 @@ sub _outrefs
 
 package Devel::MAT::SV::ARRAY;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 4 );
 
 =head1 Devel::MAT::SV::ARRAY
@@ -665,6 +704,13 @@ __PACKAGE__->register_type( 4 );
 Represents an array; an SV of type C<SVt_PVAV>.
 
 =cut
+
+sub refcount_adjusted
+{
+   my $self = shift;
+   # AVs that are backrefs lists have an SvREFCNT artificially high
+   return $self->refcnt - ( $self->is_backrefs ? 1 : 0 );
+}
 
 sub load
 {
@@ -683,9 +729,14 @@ sub load
 Returns true if the C<AvREAL()> flag is not set on the array - i.e. that its
 SV pointers do not contribute to the C<SvREFCNT> of the SVs it points at.
 
+=head2 $backrefs = $av->is_backrefs
+
+Returns true if the array contains the backrefs list of a hash or
+weakly-referenced object.
+
 =cut
 
-# XS accessor
+# XS accessors
 
 sub name
 {
@@ -757,7 +808,7 @@ sub _outrefs
 package Devel::MAT::SV::PADLIST;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 use constant type => "PADLIST";
 
 =head1 Devel::MAT::SV::PADLIST
@@ -765,6 +816,8 @@ use constant type => "PADLIST";
 A subclass of ARRAY, this is used to represent the PADLIST of a CODE SV.
 
 =cut
+
+sub padcv { my $self = shift; return $self->df->sv_at( $self->padcv_at ) }
 
 sub desc
 {
@@ -791,7 +844,7 @@ sub _outrefs
 package Devel::MAT::SV::PADNAMES;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 use constant type => "PADNAMES";
 
 =head1 Devel::MAT::SV::PADNAMES
@@ -799,6 +852,8 @@ use constant type => "PADNAMES";
 A subclass of ARRAY, this is used to represent the PADNAMES of a CODE SV.
 
 =cut
+
+sub padcv { my $self = shift; return $self->df->sv_at( $self->padcv_at ) }
 
 =head2 $padname = $padnames->padname( $padix )
 
@@ -840,7 +895,7 @@ sub _outrefs
 package Devel::MAT::SV::PAD;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 use constant type => "PAD";
 
 use List::Util qw( pairmap );
@@ -881,15 +936,24 @@ sub lexvars
 sub _outrefs
 {
    my $self = shift;
+   my $padcv = $self->padcv;
+
+   my @svs = $self->elems;
 
    return (
-      pairmap { $direct_or_rv->( "the lexical $a" => $b ) } $self->lexvars
+      '+the @_ av' => $svs[0],
+      map {
+         my $sv = $svs[$_];
+         my $name = $padcv->padname( $_ );
+         $name ? ( $direct_or_rv->( "the lexical $name" => $sv ) )
+               : ( $direct_or_rv->( "elem [$_]" => $sv ) )
+      } 1 .. $#svs,
    );
 }
 
 package Devel::MAT::SV::HASH;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 5 );
 
 =head1 Devel::MAT::SV::HASH
@@ -927,8 +991,7 @@ sub _fixup
    my $self = shift;
 
    if( my $backrefs = $self->backrefs ) {
-      # All backrefs ARRAYs are always UNREAL
-      $backrefs->{flags} |= 0x01 if $backrefs->type eq "ARRAY";
+      $backrefs->_set_backrefs( 1 ) if $backrefs->type eq "ARRAY";
    }
 }
 
@@ -939,12 +1002,7 @@ sub name
    return '%' . $self->df->sv_at( $glob_at )->stashname;
 }
 
-=head2 $av = $hv->backrefs
-
-Returns the AV containing weak reference backrefs
-
-=cut
-
+# HVs have a backrefs field directly, rather than using magic
 sub backrefs
 {
    my $self = shift;
@@ -1018,7 +1076,7 @@ sub _outrefs
 
 package Devel::MAT::SV::STASH;
 use base qw( Devel::MAT::SV::HASH );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 6 );
 
 =head1 Devel::MAT::SV::STASH
@@ -1098,8 +1156,10 @@ sub _outrefs
 
 package Devel::MAT::SV::CODE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 7 );
+
+use List::MoreUtils qw( uniq );
 
 =head1 Devel::MAT::SV::CODE
 
@@ -1149,6 +1209,7 @@ sub _fixup
 
    my $padlist = $self->padlist;
    bless $padlist, "Devel::MAT::SV::PADLIST" if $padlist;
+   $padlist->_set_padcv_at( $self->addr ) if $padlist;
 
    my $padnames;
    my @pads;
@@ -1156,7 +1217,6 @@ sub _fixup
    # 5.18.0 onwards has a totally different padlist arrangement
    if( $df->{perlver} >= ( ( 5 << 24 ) | ( 18 << 16 ) ) ) {
       $padnames = $self->padnames;
-      bless $padnames, "Devel::MAT::SV::PADNAMES";
 
       @pads = map { $df->sv_at( $_ ) } @{ $self->{pads_at} };
       shift @pads; # always zero
@@ -1169,6 +1229,7 @@ sub _fixup
    }
 
    bless $padnames, "Devel::MAT::SV::PADNAMES";
+   $padnames->_set_padcv_at( $self->addr );
 
    bless $_, "Devel::MAT::SV::PAD" for @pads;
    $_->_set_padcv_at( $self->addr ) for @pads;
@@ -1179,13 +1240,18 @@ sub _fixup
    if( $df->ithreads ) {
       my $pad0 = $pads[0];
 
-      @{$self->{consts_at}} = map { my $e = $pad0->elem($_); $e ? $e->addr : undef } @{ $self->{constix} || [] };
-      @{$self->{gvs_at}}    = map { my $e = $pad0->elem($_); $e ? $e->addr : undef } @{ $self->{gvix} || [] };
+      foreach my $type (qw( const gv )) {
+         my $idxes  = $self->{"${type}ix"} or next;
+         my $svs_at = $self->{"${type}s_at"} ||= [];
 
-      # Clear the obviously unused elements of lexnames and padlists
-      foreach my $ix ( @{ delete $self->{constix} || [] }, @{ delete $self->{gvix} || [] } ) {
-         $padnames->_clear_elem( $ix );
-         $_->_clear_elem( $ix ) for @pads;
+         @$svs_at = map { my $e = $pad0->elem($_);
+                          $e ? $e->addr : undef } uniq @$idxes;
+
+         # Clear the obviously unused elements of lexnames and padlists
+         foreach my $ix ( @$idxes ) {
+            $padnames->_clear_elem( $ix );
+            $_->_clear_elem( $ix ) for @pads;
+         }
       }
    }
 }
@@ -1310,13 +1376,7 @@ sub padname
    my $self = shift;
    my ( $padix ) = @_;
 
-   for( my $scope = $self; $scope; $scope = $scope->scope ) {
-      my $padnames = $scope->padnames;
-      my $name = $padnames->padname( $padix );
-      return $name if defined $name;
-   }
-
-   return undef;
+   return $self->padnames->padname( $padix );
 }
 
 =head2 $padnames = $cv->padnames
@@ -1399,8 +1459,8 @@ sub _outrefs
       "+the constant value" => $self->constval,
       ".the protosub" => $self->protosub,
 
-      ( map { +";a constant" => $_ } $self->constants ),
-      ( map { +";a referenced glob" => $_ } $self->globrefs ),
+      ( map { +"+a constant" => $_ } $self->constants ),
+      ( map { +"+a referenced glob" => $_ } $self->globrefs ),
 
       "+the padlist" => $padlist,
       $padnames_desc => $self->padnames,
@@ -1414,7 +1474,7 @@ sub _outrefs
 
 package Devel::MAT::SV::IO;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 8 );
 
 sub load
@@ -1444,7 +1504,7 @@ sub _outrefs
 
 package Devel::MAT::SV::LVALUE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 9 );
 
 sub load
@@ -1477,7 +1537,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REGEXP;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 10 );
 
 sub load {}
@@ -1488,7 +1548,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::FORMAT;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 11 );
 
 sub load {}
@@ -1499,7 +1559,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::INVLIST;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 __PACKAGE__->register_type( 12 );
 
 sub load {}

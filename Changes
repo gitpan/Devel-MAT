@@ -1,5 +1,16 @@
 Revision history for Devel-MAT
 
+0.16    2014/01/15 18:18:53
+        [CHANGES]
+         * More accurate format for dumping SV MAGIC annotations
+            - note that older files will contain incorrect information
+         * More accurate backref information
+         * Improvements to analysis of PAD lexicals
+
+        [BUGFIXES]
+         * Fix many cases of optree dumping to get correct PAD indexes
+         * Further minor fixes that improve SvREFCNT / inrefs accuracy
+
 0.15    2014/01/14 11:12:37
         [CHANGES]
          * Remember to basename() $0 for default dumpfile name

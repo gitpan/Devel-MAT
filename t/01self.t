@@ -68,6 +68,11 @@ BEGIN { our %PACKAGE_HASH = ( one => 1, two => 2 ) }
    is( $hv->value("one")->uv, 1, 'PACKAGE_HASH HV has elements' );
 }
 
+{
+   ok( my $backrefs = $defstash->backrefs, 'Default stash HV has backrefs' );
+   ok( $backrefs->is_backrefs, 'Backrefs AV knows it is a backrefs list' );
+}
+
 sub PACKAGE_CODE { my $lexvar = "An unlikely scalar value"; }
 {
    ok( my $gv = $defstash->value( "PACKAGE_CODE" ), 'default stash has PACKAGE_CODE' );
@@ -122,6 +127,9 @@ BEGIN { our $strongref = []; weaken( our $weakref = $strongref ) }
 
    ok( !$rv_strong->is_weak, '$strongref is not weak' );
    ok(  $rv_weak->is_weak,   '$weakref is weak'       ); # and longcat is long
+
+   my $target = $rv_weak->rv;
+   ok( my $backrefs = $target->backrefs, 'Weakref target has backrefs' );
 }
 
 # Code hidden in a BEGIN block wouldn't be seen

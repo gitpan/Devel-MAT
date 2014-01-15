@@ -235,7 +235,11 @@ $win->set_title( "$filename - pmat-explore-gtk" );
 $pmat = Devel::MAT->load( $filename, progress => \&progress );
 $df = $pmat->dumpfile;
 
-$perlver_label->set_text( "Perl " . $df->perlversion );
+$perlver_label->set_text( join " ", "Perl",
+   $df->perlversion,
+   ( $df->ithreads ? "thread" : () ),
+   ( $df->ptr_len * 8 ) . "bit",
+);
 $svcount_label->set_text( scalar($df->heap) . " SVs" );
 
 # We're going to be using Inrefs

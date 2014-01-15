@@ -13,7 +13,8 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#define FORMAT_VERSION 0
+#define FORMAT_VERSION_MAJOR 0
+#define FORMAT_VERSION_MINOR 1
 
 #ifndef SvOOK_offset
 #  define SvOOK_offset(sv, len) STMT_START { len = SvIVX(sv); } STMT_END
@@ -151,9 +152,17 @@ static void write_str(FILE *fh, const char *s)
     write_uint(fh, -1);
 }
 
+#define PMOP_pmreplroot(o)      o->op_pmreplrootu.op_pmreplroot
+
+#if (PERL_REVISION == 5) && (PERL_VERSION < 14)
+# define OP_CLASS(o)  (PL_opargs[o->op_type] & OA_CLASS_MASK)
+#endif
+
 static void dump_optree(FILE *fh, const CV *cv, OP *o);
 static void dump_optree(FILE *fh, const CV *cv, OP *o)
 {
+  OP *kid;
+
   switch(o->op_type) {
     case OP_CONST:
     case OP_METHOD_NAMED:
@@ -173,7 +182,7 @@ static void dump_optree(FILE *fh, const CV *cv, OP *o)
     case OP_GV:
 #ifdef USE_ITHREADS
       write_u8(fh, PMAT_CODEx_GVIX);
-      write_uint(fh, o->op_targ);
+      write_uint(fh, o->op_targ ? o->op_targ : cPADOPx(o)->op_padix);
 #else
       write_u8(fh, PMAT_CODEx_GVSV);
       write_svptr(fh, cSVOPx(o)->op_sv);
@@ -182,11 +191,14 @@ static void dump_optree(FILE *fh, const CV *cv, OP *o)
   }
 
   if(o->op_flags & OPf_KIDS) {
-    OP *kid;
     for (kid = ((UNOP*)o)->op_first; kid; kid = kid->op_sibling) {
       dump_optree(fh, cv, kid);
     }
   }
+
+  if(OP_CLASS(o) == OA_PMOP && o->op_type != OP_PUSHRE &&
+     (kid = PMOP_pmreplroot(cPMOPx(o))))
+    dump_optree(fh, cv, kid);
 }
 
 static void write_common_sv(FILE *fh, const SV *sv, size_t size)
@@ -584,19 +596,15 @@ static void write_sv(FILE *fh, const SV *sv)
   if(SvMAGICAL(sv)) {
     MAGIC *mg;
     for(mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic) {
-      if(mg->mg_flags & MGf_REFCOUNTED) {
-        write_u8(fh, PMAT_SVtMAGIC);
-        write_svptr(fh, sv);
-        write_svptr(fh, mg->mg_obj);
-        write_u8(fh, mg->mg_type);
-      }
-
-      if(mg->mg_len == HEf_SVKEY) {
-        write_u8(fh, PMAT_SVtMAGIC);
-        write_svptr(fh, sv);
+      write_u8(fh, PMAT_SVtMAGIC);
+      write_svptr(fh, sv);
+      write_u8(fh, mg->mg_type);
+      write_u8(fh, (mg->mg_flags & MGf_REFCOUNTED ? 0x01 : 0));
+      write_svptr(fh, mg->mg_obj);
+      if(mg->mg_len == HEf_SVKEY)
         write_svptr(fh, (SV*)mg->mg_ptr);
-        write_u8(fh, mg->mg_type);
-      }
+      else
+        write_svptr(fh, NULL);
     }
   }
 }
@@ -705,7 +713,8 @@ static void dumpfh(FILE *fh)
 
   write_u8(fh, flags);
   write_u8(fh, 0);
-  write_u8(fh, FORMAT_VERSION >> 8); write_u8(fh, FORMAT_VERSION & 0xff);
+  write_u8(fh, FORMAT_VERSION_MAJOR);
+  write_u8(fh, FORMAT_VERSION_MINOR);
 
   write_u32(fh, PERL_REVISION<<24 | PERL_VERSION<<16 | PERL_SUBVERSION);
 
@@ -736,6 +745,7 @@ static void dumpfh(FILE *fh)
     { "argvgv",          (SV*)PL_argvgv },
     { "argvoutgv",       (SV*)PL_argvoutgv },
     { "argvout_stack",   (SV*)PL_argvout_stack },
+    { "errgv",           (SV*)PL_errgv },
     { "fdpid",           (SV*)PL_fdpid },
     { "preambleav",      (SV*)PL_preambleav },
     { "modglobalhv",     (SV*)PL_modglobal },
@@ -896,7 +906,11 @@ static void dumpfh(FILE *fh)
   write_u8(fh, 0);
 }
 
-static void dump(char *file)
+MODULE = Devel::MAT::Dumper        PACKAGE = Devel::MAT::Dumper
+
+void
+dump(char *file)
+CODE:
 {
   FILE *fh = fopen(file, "wb+");
   if(!fh)
@@ -905,11 +919,6 @@ static void dump(char *file)
   dumpfh(fh);
   fclose(fh);
 }
-
-MODULE = Devel::MAT::Dumper        PACKAGE = Devel::MAT::Dumper
-
-void
-dump(char *file)
 
 void
 dumpfh(FILE *fh)

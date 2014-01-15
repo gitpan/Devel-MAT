@@ -11,6 +11,7 @@ my $build = Module::Build->new(
    },
    requires => {
       'File::ShareDir' => 0,
+      'List::MoreUtils' => 0, # uniq
       'List::Util' => '1.29', # pair* functions
       'List::UtilsBy' => 0,   # sort_by
       'Module::Pluggable' => 0,

@@ -1,4 +1,5 @@
 bin/pmat-callstack
+bin/pmat-cat-svpv
 bin/pmat-count
 bin/pmat-dump-symbols
 bin/pmat-explore-gtk

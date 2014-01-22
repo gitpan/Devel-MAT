@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -306,7 +306,7 @@ boolean true and false. They are
 
 package Devel::MAT::SV::Immortal;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 use constant immortal => 1;
 sub new {
    my $class = shift;
@@ -319,13 +319,13 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::UNDEF;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 sub desc { "UNDEF" }
 sub type { "UNDEF" }
 
 package Devel::MAT::SV::YES;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 sub desc { "YES" }
 sub type { "SCALAR" }
 
@@ -340,7 +340,7 @@ sub name {}
 
 package Devel::MAT::SV::NO;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 sub desc { "NO" }
 sub type { "SCALAR" }
 
@@ -355,7 +355,7 @@ sub name {}
 
 package Devel::MAT::SV::Unknown;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 0xff );
 
 sub desc { "UNKNOWN" }
@@ -364,7 +364,7 @@ sub _outrefs {}
 
 package Devel::MAT::SV::GLOB;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 1 );
 
 =head1 Devel::MAT::SV::GLOB
@@ -495,7 +495,7 @@ sub _outrefs
 
 package Devel::MAT::SV::SCALAR;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 2 );
 
 =head1 Devel::MAT::SV::SCALAR
@@ -526,7 +526,7 @@ sub load
 
    # $strs->[0] is now undef
 
-   $flags &= ~0x0f;
+   $flags &= ~0x1f;
    $flags and die sprintf "Unrecognised SCALAR flags %02x\n", $flags;
 }
 
@@ -625,7 +625,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REF;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 3 );
 
 =head1 Devel::MAT::SV::REF
@@ -696,7 +696,7 @@ sub _outrefs
 
 package Devel::MAT::SV::ARRAY;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 4 );
 
 =head1 Devel::MAT::SV::ARRAY
@@ -808,7 +808,7 @@ sub _outrefs
 package Devel::MAT::SV::PADLIST;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 use constant type => "PADLIST";
 
 =head1 Devel::MAT::SV::PADLIST
@@ -844,7 +844,7 @@ sub _outrefs
 package Devel::MAT::SV::PADNAMES;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 use constant type => "PADNAMES";
 
 =head1 Devel::MAT::SV::PADNAMES
@@ -895,7 +895,7 @@ sub _outrefs
 package Devel::MAT::SV::PAD;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 use constant type => "PAD";
 
 use List::Util qw( pairmap );
@@ -953,7 +953,7 @@ sub _outrefs
 
 package Devel::MAT::SV::HASH;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 5 );
 
 =head1 Devel::MAT::SV::HASH
@@ -1076,7 +1076,7 @@ sub _outrefs
 
 package Devel::MAT::SV::STASH;
 use base qw( Devel::MAT::SV::HASH );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 6 );
 
 =head1 Devel::MAT::SV::STASH
@@ -1156,7 +1156,7 @@ sub _outrefs
 
 package Devel::MAT::SV::CODE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 7 );
 
 use List::MoreUtils qw( uniq );
@@ -1231,8 +1231,12 @@ sub _fixup
    bless $padnames, "Devel::MAT::SV::PADNAMES";
    $padnames->_set_padcv_at( $self->addr );
 
-   bless $_, "Devel::MAT::SV::PAD" for @pads;
-   $_->_set_padcv_at( $self->addr ) for @pads;
+   foreach my $pad ( @pads ) {
+      next unless $pad;
+
+      bless $pad, "Devel::MAT::SV::PAD";
+      $pad->_set_padcv_at( $self->addr );
+   }
 
    $self->{pads} = \@pads;
 
@@ -1250,7 +1254,7 @@ sub _fixup
          # Clear the obviously unused elements of lexnames and padlists
          foreach my $ix ( @$idxes ) {
             $padnames->_clear_elem( $ix );
-            $_->_clear_elem( $ix ) for @pads;
+            $_ and $_->_clear_elem( $ix ) for @pads;
          }
       }
    }
@@ -1474,7 +1478,7 @@ sub _outrefs
 
 package Devel::MAT::SV::IO;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 8 );
 
 sub load
@@ -1504,7 +1508,7 @@ sub _outrefs
 
 package Devel::MAT::SV::LVALUE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 9 );
 
 sub load
@@ -1537,7 +1541,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REGEXP;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 10 );
 
 sub load {}
@@ -1548,7 +1552,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::FORMAT;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 11 );
 
 sub load {}
@@ -1559,7 +1563,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::INVLIST;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 __PACKAGE__->register_type( 12 );
 
 sub load {}

@@ -409,6 +409,17 @@ CODE:
     free_pmat_sv((struct pmat_sv *)sv);
   }
 
+int pv_is_utf8(self)
+  HV   *self
+CODE:
+  {
+    struct pmat_sv_scalar *sv = (struct pmat_sv_scalar *)get_pmat_sv(self);
+    if(sv)
+      RETVAL = sv->flags & 0x10;
+  }
+OUTPUT:
+  RETVAL
+
 SV *uv(self)
   HV   *self
 CODE:
@@ -453,6 +464,8 @@ CODE:
     RETVAL = newSV(0);
     if(sv && sv->flags & 0x08)
       sv_setpvn(RETVAL, sv->pv, sv->pv_strlen);
+    if(sv && sv->flags & 0x10)
+      SvUTF8_on(RETVAL);
   }
 OUTPUT:
   RETVAL

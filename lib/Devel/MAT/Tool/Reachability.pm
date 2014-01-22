@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.16';
+our $VERSION = '0.17';
 
 use constant FOR_UI => 1;
 
@@ -201,10 +201,12 @@ sub mark_reachable
             when( "ARRAY" )  { push @more_user, $sv->elems; }
             when( "HASH" )   { push @more_user, $sv->values; }
             when( "GLOB" ) {
-               # Any user GLOBs we find should just be IO refs
                my $gv = $sv;
-               $gv->io or warn "Found a user GLOB that isn't an IO ref";
-               $gv->{tool_reachable} = REACH_USER; # no @more
+               next if $gv->{tool_reachable}; # already on symbol table
+
+               warn "Found non-SYMTAB GLOB " . $gv->desc_addr . " user reachable\n";
+               # Hard to know if the GV is being used for GVSV, GVAV, GVHV or GVCV
+               push @more_user, $gv->scalar, $gv->array, $gv->hash, $gv->code, $gv->egv, $gv->io, $gv->form;
             }
             when( "CODE" ) {
                my $cv = $sv;

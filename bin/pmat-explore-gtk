@@ -488,6 +488,9 @@ sub display_sv
       when([ "GLOB", "CODE" ]) {
          table_add( "Location", label( $sv->location ) );
       }
+      when([ "PAD", "PADNAMES", "PADLIST" ]) {
+         table_add( "CV location", label( $sv->padcv->location ) );
+      }
    }
 
    foreach my $extra ( @more_details ) {

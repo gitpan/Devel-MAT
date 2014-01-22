@@ -104,6 +104,7 @@ An SV:
                      0x02 : IV is UV
                      0x04 : has NV
                      0x08 : has STR
+                     0x10 : STR is UTF8
       UINT    IV
       double  NV
       UINT    PVLEN

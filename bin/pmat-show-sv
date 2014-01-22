@@ -64,6 +64,7 @@ sub show_sv
 
          my @pads = $sv->pads;
          foreach my $depth ( 0 .. $#pads ) {
+            next unless $pads[$depth];
             say "  pad[$depth]=" . $pads[$depth]->desc_addr;
          }
 

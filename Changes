@@ -1,5 +1,13 @@
 Revision history for Devel-MAT
 
+0.17    2014/01/22 21:33:45
+        [CHANGES]
+         * Also dump SvUTF8() flag of PVs
+         * Added pmat-cat-svpv
+
+        [BUGFIXES]
+         * Don't crash on NULL PADLIST elements (RT92290)
+
 0.16    2014/01/15 18:18:53
         [CHANGES]
          * More accurate format for dumping SV MAGIC annotations

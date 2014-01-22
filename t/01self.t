@@ -158,4 +158,24 @@ BEGIN { our @QUOTING = ( "1\\2", "don't", "do\0this", "at\x9fhome", "LONG"x100 )
               '$sv->qq_pv quotes correctly' );
 }
 
+BEGIN {
+   our $BYTESTRING = do { no utf8; "\xa0bytes are here" };
+   our $UTF8STRING = do { use utf8; "\x{2588}UTF-8 bytes are here" };
+}
+{
+   {
+      no utf8;
+      my $bytesv = $pmat->find_symbol( '$BYTESTRING' );
+      ok( !$bytesv->pv_is_utf8, '$BYTESTRING lacks SvUTF8' );
+      ok( $bytesv->pv =~ m/\xa0/, '$BYTESTRING contains \xa0 byte' );
+   }
+
+   {
+      use utf8;
+      my $utf8sv = $pmat->find_symbol( '$UTF8STRING' );
+      ok( $utf8sv->pv_is_utf8, '$UTF8STRING has SvUTF8' );
+      ok( $utf8sv->pv =~ m/\x{2588}/, '$UTF8STRING contains U+2588' );
+   }
+}
+
 done_testing;

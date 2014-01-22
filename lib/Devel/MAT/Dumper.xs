@@ -281,7 +281,8 @@ static void write_private_sv(FILE *fh, const SV *sv)
   write_u8(fh, (SvIOK(sv) ? 0x01 : 0) |
                (SvUOK(sv) ? 0x02 : 0) |
                (SvNOK(sv) ? 0x04 : 0) |
-               (SvPOK(sv) ? 0x08 : 0));
+               (SvPOK(sv) ? 0x08 : 0) |
+               (SvUTF8(sv) ? 0x10 : 0));
   write_uint(fh, SvIOK(sv) ? SvUVX(sv) : 0);
   write_nv(fh, SvNOK(sv) ? SvNVX(sv) : 0.0);
   write_uint(fh, SvPOK(sv) ? SvCUR(sv) : 0);
@@ -700,11 +701,8 @@ static void dumpfh(FILE *fh)
 # error "Expected PTRSIZE to be either 4 or 8"
 #endif
 
-#if NVSIZE == 10 || NVSIZE == 16
+#if NVSIZE > 8
   flags |= 0x08; // long-double
-#elif NVSIZE == 8
-#else
-# error "Expected NVSIZE to be either 8, 10 or 16"
 #endif
 
 #ifdef USE_ITHREADS

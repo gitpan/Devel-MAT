@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -20,6 +20,9 @@ use List::Util qw( pairgrep pairmap pairs );
 require Devel::MAT;
 
 use constant immortal => 0;
+
+use Struct::Dumb qw( readonly_struct );
+readonly_struct Reference => [qw( name strength sv )];
 
 =head1 NAME
 
@@ -210,26 +213,48 @@ sub more_magic
    push @{ $self->{magic} }, [ $type => $flags, $obj_at, $ptr_at ];
 }
 
-=head2 %refs = $sv->outrefs
+=head2 @refs = $sv->outrefs
 
-Returns a name/value list giving names and other SV objects for each of the
-SVs that this one refers to, either directly by strong or weak reference,
-indirectly via RV, or inferred by C<Devel::MAT> itself.
+Returns a list of Reference objects for each of the SVs that this one refers
+to, either directly by strong or weak reference, indirectly via RV, or
+inferred by C<Devel::MAT> itself.
+
+Each object is a structure of three fields:
+
+=over 4
+
+=item name => STRING
+
+A human-readable string for identification purposes.
+
+=item strength => "strong"|"weak"|"indirect"|"inferred"
+
+Identifies what kind of reference it is. C<strong> references contribute to
+the C<refcount> of the referrant, others do not. C<strong> and C<weak>
+references are SV addresses found directly within the referring SV structure;
+C<indirect> and C<inferred> references are extra return values added here for
+convenience by examining the surrounding structure.
+
+=item sv => SV
+
+The referrant SV itself.
+
+=back
 
 =cut
 
 # Each outref name starts with one of four characters to indicate its type
-#   +name = direct strong
-#   -name = direct weak
-#   ;name = indirect
-#   .name = inferred
+my %STRENGTH_FROM_PREFIX = (
+   "+" => "strong", # direct strong
+   "-" => "weak",   # direct weak
+   ";" => "indirect",
+   "." => "inferred",
+);
 
-
-# $no_mangle is used by the Inrefs tool
 sub _outrefs_matching
 {
    my $self = shift;
-   my ( $match, $no_mangle ) = @_;
+   my ( $match ) = @_;
 
    my @outrefs = pairgrep { defined $b } $self->_outrefs;
 
@@ -251,30 +276,31 @@ sub _outrefs_matching
 
    return @outrefs / 2 if !wantarray;
 
-   # Strip type prefixes
-   @outrefs = pairmap { substr( $a, 1 ) => $b } @outrefs unless $no_mangle;
-   return @outrefs;
+   return pairmap {
+      my $prefix = substr( $a, 0, 1, "" );
+      Reference( $a, $STRENGTH_FROM_PREFIX{$prefix}, $b )
+   } @outrefs;
 }
 
 sub outrefs { shift->_outrefs_matching( undef ) }
 
-=head2 %refs = $sv->outrefs_strong
+=head2 @refs = $sv->outrefs_strong
 
 Returns the subset of C<outrefs> that are direct strong references.
 
-=head2 %refs = $sv->outrefs_weak
+=head2 @refs = $sv->outrefs_weak
 
 Returns the subset of C<outrefs> that are direct weak references.
 
-=head2 %refs = $sv->outrefs_direct
+=head2 @refs = $sv->outrefs_direct
 
 Returns the subset of C<outrefs> that are direct strong or weak references.
 
-=head2 %refs = $sv->outrefs_indirect
+=head2 @refs = $sv->outrefs_indirect
 
 Returns the subset of C<outrefs> that are indirect references via RVs.
 
-=head2 %refs = $sv->outrefs_inferred
+=head2 @refs = $sv->outrefs_inferred
 
 Returns the subset of C<outrefs> that are not directly stored in the SV
 structure, but instead inferred by C<Devel::MAT> itself.
@@ -306,7 +332,7 @@ boolean true and false. They are
 
 package Devel::MAT::SV::Immortal;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 use constant immortal => 1;
 sub new {
    my $class = shift;
@@ -319,13 +345,13 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::UNDEF;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 sub desc { "UNDEF" }
 sub type { "UNDEF" }
 
 package Devel::MAT::SV::YES;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 sub desc { "YES" }
 sub type { "SCALAR" }
 
@@ -340,7 +366,7 @@ sub name {}
 
 package Devel::MAT::SV::NO;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 sub desc { "NO" }
 sub type { "SCALAR" }
 
@@ -355,7 +381,7 @@ sub name {}
 
 package Devel::MAT::SV::Unknown;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 0xff );
 
 sub desc { "UNKNOWN" }
@@ -364,7 +390,7 @@ sub _outrefs {}
 
 package Devel::MAT::SV::GLOB;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 1 );
 
 =head1 Devel::MAT::SV::GLOB
@@ -495,7 +521,7 @@ sub _outrefs
 
 package Devel::MAT::SV::SCALAR;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 2 );
 
 =head1 Devel::MAT::SV::SCALAR
@@ -625,7 +651,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REF;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 3 );
 
 =head1 Devel::MAT::SV::REF
@@ -696,7 +722,7 @@ sub _outrefs
 
 package Devel::MAT::SV::ARRAY;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 4 );
 
 =head1 Devel::MAT::SV::ARRAY
@@ -808,7 +834,7 @@ sub _outrefs
 package Devel::MAT::SV::PADLIST;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 use constant type => "PADLIST";
 
 =head1 Devel::MAT::SV::PADLIST
@@ -844,7 +870,7 @@ sub _outrefs
 package Devel::MAT::SV::PADNAMES;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 use constant type => "PADNAMES";
 
 =head1 Devel::MAT::SV::PADNAMES
@@ -895,7 +921,7 @@ sub _outrefs
 package Devel::MAT::SV::PAD;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 use constant type => "PAD";
 
 use List::Util qw( pairmap );
@@ -953,7 +979,7 @@ sub _outrefs
 
 package Devel::MAT::SV::HASH;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 5 );
 
 =head1 Devel::MAT::SV::HASH
@@ -1076,7 +1102,7 @@ sub _outrefs
 
 package Devel::MAT::SV::STASH;
 use base qw( Devel::MAT::SV::HASH );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 6 );
 
 =head1 Devel::MAT::SV::STASH
@@ -1156,7 +1182,7 @@ sub _outrefs
 
 package Devel::MAT::SV::CODE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 7 );
 
 use List::MoreUtils qw( uniq );
@@ -1478,7 +1504,7 @@ sub _outrefs
 
 package Devel::MAT::SV::IO;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 8 );
 
 sub load
@@ -1508,7 +1534,7 @@ sub _outrefs
 
 package Devel::MAT::SV::LVALUE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 9 );
 
 sub load
@@ -1541,7 +1567,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REGEXP;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 10 );
 
 sub load {}
@@ -1552,7 +1578,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::FORMAT;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 11 );
 
 sub load {}
@@ -1563,7 +1589,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::INVLIST;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 12 );
 
 sub load {}

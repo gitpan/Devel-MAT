@@ -16,6 +16,7 @@ my $build = Module::Build->new(
       'List::UtilsBy' => 0,   # sort_by
       'Module::Pluggable' => 0,
       'perl' => '5.010',      # various XS failures on 5.8
+      'Struct::Dumb' => 0,
    },
    auto_configure_requires => 0, # Don't add M::B to configure_requires
    share_dir => {

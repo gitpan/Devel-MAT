@@ -30,6 +30,9 @@ foreach (qw( SCALAR REF ARRAY HASH CODE GLOB STASH LVALUE REGEXP IO FORMAT PADLI
       module_file( "Devel::MAT::UI", "icons/type-$_.svg" ), 40, 40
    );
 }
+foreach (qw( strong weak indirect inferred )) {
+   Devel::MAT::UI->register_icon( name => "strength-$_", svg => "icons/strength-$_.svg" );
+}
 
 my $win = Gtk2::Window->new( "toplevel" );
 $win->signal_connect( destroy => sub { Gtk2->main_quit } );
@@ -499,52 +502,55 @@ sub display_sv
 
       my $widget;
       given( $extra->{type} ) {
-         when( "text" ) { $widget = label( $data ) }
-         when( "icon" ) { $widget = Gtk2::Image->new_from_pixbuf( $ICONS{$data} ) }
-         default        { die "Unable to handle SV detail type $extra->{type}" }
+         when( "widget" ) { $widget = $data }
+         when( "text" )   { $widget = label( $data ) }
+         when( "icon" )   { $widget = Gtk2::Image->new_from_pixbuf( $ICONS{$data} ) }
+         default          { die "Unable to handle SV detail type $extra->{type}" }
       }
 
       table_add( $extra->{title} => $widget )
    }
 
    my $outrefs = Gtk2::SimpleList->new(
+      " "    => "pixbuf",
       "Ref"  => "text",
       "Addr" => "text",
       "Desc" => "text",
    );
-   foreach ( sort_by { $_->[0] } pairs $sv->$outrefs_mth ) {
-      my ( $name, $ref ) = @$_;
-      push @{ $outrefs->{data} }, [ $name, sprintf( "%#x", $ref->addr ), $ref->desc ];
+   foreach my $ref ( sort_by { $_->name } $sv->$outrefs_mth ) {
+      my $strength = $ref->strength;
+      push @{ $outrefs->{data} }, [ $ICONS{"strength-$strength"}, $ref->name, sprintf( "%#x", $ref->sv->addr ), $ref->sv->desc ];
    }
    $outrefs->signal_connect( row_activated => sub {
       my( $self, $path, $column ) = @_;
       my $data = $self->get_row_data_from_path( $path );
 
-      my $addr = hex $data->[1];
+      my $addr = hex $data->[2];
       my $sv = $df->sv_at( $addr );
       history_nav( $sv );
    });
    table_add( "Outrefs" => vscrollable( $outrefs ), [ "expand", "fill" ] );
 
    my $inrefs = Gtk2::SimpleList->new(
+      " "    => "pixbuf",
       "Ref"  => "text",
       "Addr" => "text",
       "Desc" => "text",
    );
-   foreach ( sort_by { $_->[0] } pairs $sv->$inrefs_mth ) {
-      my ( $name, $ref ) = @$_;
-      if( $ref ) {
-         push @{ $inrefs->{data} }, [ $name, sprintf( "%#x", $ref->addr ), $ref->desc ];
+   foreach my $ref ( sort_by { $_->name } $sv->$inrefs_mth ) {
+      my $strength = $ref->strength;
+      if( $ref->sv ) {
+         push @{ $inrefs->{data} }, [ $ICONS{"strength-$strength"}, $ref->name, sprintf( "%#x", $ref->sv->addr ), $ref->sv->desc ];
       }
       else {
-         push @{ $inrefs->{data} }, [ $name, "-", "ROOT" ];
+         push @{ $inrefs->{data} }, [ $ICONS{"strength-$strength"}, $ref->name, "-", "ROOT" ];
       }
    }
    $inrefs->signal_connect( row_activated => sub {
       my( $self, $path, $column ) = @_;
       my $data = $self->get_row_data_from_path( $path );
 
-      my $addr = hex $data->[1];
+      my $addr = hex $data->[2];
       my $sv = $df->sv_at( $addr );
       history_nav( $sv ) if $sv;
    });
@@ -625,7 +631,9 @@ sub Devel::MAT::UI::register_icon
 
    my $path = delete $args{svg} or die "Cannot register an icon - need an SVG path";
 
-   $ICONS{$name} = Gtk2::Gdk::Pixbuf->new_from_file( module_file( "Devel::MAT::UI", $path ) );
+   -f $path or $path = module_file( "Devel::MAT::UI", $path );
+
+   $ICONS{$name} = Gtk2::Gdk::Pixbuf->new_from_file( $path );
 }
 
 sub Devel::MAT::UI::provides_radiobutton_set
@@ -740,4 +748,41 @@ sub Devel::MAT::UI::provides_sv_detail
       title  => $args{title},
       render => $args{render},
    };
+}
+
+sub Devel::MAT::UI::make_table
+{
+   shift;
+
+   my $table = Gtk2::Table->new( 1, 2 );
+
+   foreach ( pairs @_ ) {
+      my ( $label, $widget ) = @$_;
+      my ( $next_row ) = $table->get_size;
+
+      $table->attach( label( $label ), 0, 1, $next_row, $next_row + 1, [ "expand", "fill" ], [ "fill" ], 0, 3 );
+      $table->attach( $widget,         1, 2, $next_row, $next_row + 1, [ "expand", "fill" ], [ "fill" ], 0, 3 );
+   }
+
+   return $table;
+}
+
+sub Devel::MAT::UI::make_widget_text
+{
+   shift;
+   my ( $label ) = @_;
+   return label( $label );
+}
+
+sub Devel::MAT::UI::make_widget_text_icon
+{
+   shift;
+   my ( $label, $icon ) = @_;
+
+   my $hbox = Gtk2::HBox->new;
+
+   $hbox->add( label( $label ) );
+   $hbox->add( Gtk2::Image->new_from_pixbuf( $ICONS{$icon} ) );
+
+   return $hbox;
 }

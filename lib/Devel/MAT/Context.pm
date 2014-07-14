@@ -8,7 +8,7 @@ package Devel::MAT::Context;
 use strict;
 use warnings;
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -101,7 +101,7 @@ sub location
 
 package Devel::MAT::Context::SUB;
 use base qw( Devel::MAT::Context );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 1 );
 
 =head1 Devel::MAT::Context::SUB
@@ -134,7 +134,7 @@ sub args { my $self = shift; return $self->{df}->sv_at( $self->{args_at} ) }
 
 package Devel::MAT::Context::TRY;
 use base qw( Devel::MAT::Context );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 2 );
 
 =head1 Devel::MAT::Context::TRY
@@ -147,7 +147,7 @@ sub _load {}
 
 package Devel::MAT::Context::EVAL;
 use base qw( Devel::MAT::Context );
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 __PACKAGE__->register_type( 3 );
 
 =head1 Devel::MAT::Context::EVAL

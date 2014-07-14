@@ -100,14 +100,17 @@ BEGIN { our @AofA = ( [] ); }
    ok( my $rv = $av->elem(0), 'AofA AV has elem[0]' );
    ok( my $av2 = $rv->rv, 'RV has rv' );
 
-   my %av_outrefs = $av->outrefs;
-   is( $av_outrefs{"element [0] directly"}, $rv, '$rv is element[0] directly of $av' );
-   is( $av_outrefs{"element [0] via RV"}, $av2, '$av2 is element [0] via RV of $av' );
+   my @outrefs_direct = $av->outrefs_direct;
+   is( scalar @outrefs_direct, 1, '$av->outrefs_direct is 1' );
+   is( $outrefs_direct[0]->sv,       $rv,                    'AV outref[0] SV is $rv' );
+   is( $outrefs_direct[0]->strength, "strong",               'AV outref[0] strength is strong' );
+   is( $outrefs_direct[0]->name,     "element [0] directly", 'AV outref[0] name' );
 
-   is_deeply( [ $av->outrefs_direct ],
-              [ "element [0] directly" => $rv ], '$av->outrefs_direct' );
-   is_deeply( [ $av->outrefs_indirect ],
-              [ "element [0] via RV" => $av2 ], '$av->outrefs_indirect' );
+   my @outrefs_indirect = $av->outrefs_indirect;
+   is( scalar @outrefs_indirect, 1, '$av->outrefs_indirect is 1' );
+   is( $outrefs_indirect[0]->sv,        $av2,                'AV outref[0] SV is $av2' );
+   is( $outrefs_indirect[0]->strength, "indirect",           'AV outref[0] strength is indirect' );
+   is( $outrefs_indirect[0]->name,     "element [0] via RV", 'AV outref[0] name' );
 }
 
 BEGIN { our $LVREF = \substr our $TMPPV = "abc", 1, 2 }

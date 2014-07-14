@@ -44,6 +44,10 @@ share/icons/refs-Strong.svg
 share/icons/size-Owned.svg
 share/icons/size-Structure.svg
 share/icons/size-SV.svg
+share/icons/strength-indirect.svg
+share/icons/strength-inferred.svg
+share/icons/strength-strong.svg
+share/icons/strength-weak.svg
 share/icons/type-ARRAY.svg
 share/icons/type-CODE.svg
 share/icons/type-FORMAT.svg

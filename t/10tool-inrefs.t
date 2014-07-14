@@ -31,14 +31,18 @@ BEGIN { our @AofA = ( [] ); }
    my $rv  = $av->elem(0);
    my $av2 = $rv->rv;
 
-   my %av2_inrefs = $av2->inrefs;
-   is( $av2_inrefs{"the referrant"}, $rv, '$av2 is referred to as the referrant of $rv' );
-   is( $av2_inrefs{"element [0] via RV"}, $av, '$av2 is referred to as element[0] via RV of $av' );
+   my @inrefs_direct = $av2->inrefs_direct;
+   is( scalar @inrefs_direct, 1, '$av2->inrefs_direct is 1' );
+   is( $inrefs_direct[0]->sv,       $rv,             'AV inref[0] SV is $rv' );
+   is( $inrefs_direct[0]->strength, "strong",        'AV inref[0] strength is strong' );
+   is( $inrefs_direct[0]->name,     "the referrant", 'AV inref[0] name' );
 
-   is_deeply( [ $av2->inrefs_direct ],
-              [ "the referrant" => $rv ], '$av2->inrefs_direct' );
-   is_deeply( [ $av2->inrefs_indirect ],
-              [ "element [0] via RV" => $av ], '$av2->inrefs_indirect' );
+   my @av2_inrefs = $av2->inrefs;
+   is( ( grep { $_->name eq "element [0] via RV" } @av2_inrefs )[0]->sv, $av,
+      '$av2 is referred to as element[0] via RV of $av' );
+
+   is_deeply( [ map { $_->sv } $av2->inrefs_indirect ], [ $av ],
+      '$av2->inrefs_indirect' );
 }
 
 {
@@ -49,11 +53,13 @@ BEGIN { our @AofA = ( [] ); }
    # There's likely 3 items in this list:
    #   2 constants within the main code
    #   1 value of the $DUMPFILE lexical itself
-   my @constants   = grep { pairgrep { $a eq 'a constant' }
-                                     $_->inrefs } @pvs;
+   my @constants   = grep {
+      grep { $_->name eq 'a constant' } $_->inrefs
+   } @pvs;
 
-   my ( $lexical ) = grep { pairgrep { $a eq 'the lexical $DUMPFILE directly' }
-                                     $_->inrefs } @pvs;
+   my ( $lexical ) = grep {
+      grep { $_->name eq 'the lexical $DUMPFILE directly' } $_->inrefs
+   } @pvs;
 
    ok( scalar @constants, 'Found some constants' );
    ok( $lexical, 'Found the $DUMPFILE lexical' );

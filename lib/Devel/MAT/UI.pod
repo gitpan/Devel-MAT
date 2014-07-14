@@ -127,7 +127,7 @@ SV.
 
 =item type => STRING
 
-The type of the column. This may be C<text> or C<icon>.
+The type of the column. This may be C<widget>, C<text> or C<icon>.
 
 =item title => STRING
 
@@ -137,13 +137,28 @@ The title to display alongside the detail cell on the main SV display pane.
 
 A function to generate the display for a given SV address. It is invoked with
 an SV to display, and should a value whose meaning depends on the type. If it
-returns unde then the row is not displayed for this SV.
+returns undef then the row is not displayed for this SV.
 
  $value = $render->( $sv )
 
 =back
 
+If the type is C<widget>, any of the following C<make_*> methods can be used
+by the render function to generate a widget to display.
+
 =cut
+
+=head2 $widget = Devel::MAT::UI->make_widget_text( $text )
+
+Constructs a widget displaying a fixed text string.
+
+=head2 $widget = Devel::MAT::UI->make_widget_text_icon( $text, $icon )
+
+Constructs a widget displaying a fixed text string next to an icon.
+
+=head2 $widget = Devel::MAT::UI->make_table( $label => $widget, $label => $widget, ... )
+
+Constructs a widget displaying a labeled table of other widgets.
 
 =head1 AUTHOR
 

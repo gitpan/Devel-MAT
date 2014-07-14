@@ -22,6 +22,14 @@ The following methods should provided on a tool class.
 If the tool should be displayed on the UI's C<Tools> menu, this constant
 method should be provided to return a true value.
 
+=head2 $load = CLASS->AUTOLOAD_TOOL( $pmat )
+
+If the tool should be automatically loaded for the given file, this method
+should be provided to return a true value. This might be useful to provide
+extra analysis if the tool detects it can provide something useful; for
+example when the tool peeks inside objects of specific classes, and those
+classes are found in the file.
+
 =head2 $tool = CLASS->new( $pmat, %args )
 
 Constructs the instance of the tool. If the tool does not need to store any

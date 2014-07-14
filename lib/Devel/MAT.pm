@@ -1,17 +1,18 @@
 #  You may distribute under the terms of either the GNU General Public License
 #  or the Artistic License (the same terms as Perl itself)
 #
-#  (C) Paul Evans, 2013 -- leonerd@leonerd.org.uk
+#  (C) Paul Evans, 2013-2014 -- leonerd@leonerd.org.uk
 
 package Devel::MAT;
 
 use strict;
 use warnings;
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 use Carp;
 use List::Util qw( pairs );
+use List::UtilsBy qw( sort_by );
 
 use Devel::MAT::Dumpfile;
 
@@ -97,10 +98,21 @@ Lists the L<Devel::MAT::Tool> classes that are installed and available.
 
    sub available_tools
    {
+      my $self = shift;
+
       return @TOOLS if $TOOLS_LOADED;
 
       $TOOLS_LOADED++;
-      return @TOOLS = map { $_ =~ s/^Devel::MAT::Tool:://; $_ } shift->_available_tools;
+      @TOOLS = map { $_ =~ s/^Devel::MAT::Tool:://; $_ } $self->_available_tools;
+
+      foreach my $name ( @TOOLS ) {
+         my $tool_class = "Devel::MAT::Tool::$name";
+         next unless $tool_class->can( "AUTOLOAD_TOOL" ) and $tool_class->AUTOLOAD_TOOL( $self );
+
+         $self->{tools}{$name} ||= $tool_class->new( $self );
+      }
+
+      return @TOOLS;
    }
 }
 
@@ -177,35 +189,33 @@ sub identify
    $seen->{$svaddr} = 1;
 
    my @ret = ();
-   my %inrefs = $opts{strong} ? $sv->inrefs_strong :
+   my @inrefs = $opts{strong} ? $sv->inrefs_strong :
                 $opts{direct} ? $sv->inrefs_direct :
                                 $sv->inrefs;
-   foreach my $desc ( sort keys %inrefs ) {
-      my $ref = $inrefs{$desc};
-
-      if( !defined $ref ) {
-         push @ret, $desc; # e.g. "a value on the stack"
+   foreach my $ref ( sort_by { $_->name } @inrefs ) {
+      if( !defined $ref->sv ) {
+         push @ret, $ref->name; # e.g. "a value on the stack"
          next;
       }
 
       my @me;
-      if( $ref == $sv ) {
+      if( $ref->sv == $sv ) {
          @me = "itself";
       }
-      elsif( $seen->{$ref->addr} ) {
+      elsif( $seen->{$ref->sv->addr} ) {
          @me = "already found";
       }
       elsif( !defined $opts{depth} or $opts{depth} ) {
-         $seen->{$ref->addr}++;
-         @me = ( defined $opts{depth} ) ? $self->identify( $ref, %opts, depth => $opts{depth}-1 )
-                                        : $self->identify( $ref, %opts );
+         $seen->{$ref->sv->addr}++;
+         @me = ( defined $opts{depth} ) ? $self->identify( $ref->sv, %opts, depth => $opts{depth}-1 )
+                                        : $self->identify( $ref->sv, %opts );
       }
       else {
          @me = "not found at this depth";
       }
 
       push @ret,
-         sprintf( "%s of %s, which is:", $desc, $ref->desc_addr ),
+         sprintf( "%s of %s, which is:", $ref->name, $ref->sv->desc_addr ),
          map { "  $_" } @me;
    }
 

@@ -1,5 +1,14 @@
 Revision history for Devel-MAT
 
+0.18    2014/07/14 22:45:08
+        [CHANGES]
+         * Improved for Tools to create custom UIs
+            + Widget trees
+            + Label text + icon
+            + Tool-localised icon load paths
+         * Support loading Tools automatically
+         * Neater API for inrefs/outrefs that also indicates link strength
+
 0.17    2014/01/22 21:33:45
         [CHANGES]
          * Also dump SvUTF8() flag of PVs

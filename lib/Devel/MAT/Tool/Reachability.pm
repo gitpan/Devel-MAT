@@ -10,11 +10,11 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 use constant FOR_UI => 1;
 
-use List::Util qw( pairvalues pairmap );
+use List::Util qw( pairvalues );
 
 =head1 NAME
 
@@ -295,7 +295,7 @@ sub mark_reachable
 
          $sv->{tool_reachable} = REACH_INTERNAL;
 
-         push @internal, grep { defined } pairvalues $sv->outrefs;
+         push @internal, map { $_->sv ? $_->sv : () } $sv->outrefs;
 
          $count++;
          $progress->( sprintf "Marking internal reachability %d...", $count ) if $progress and $count % 1000 == 0;

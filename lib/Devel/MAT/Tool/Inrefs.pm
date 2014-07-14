@@ -8,7 +8,7 @@ package Devel::MAT::Tool::Inrefs;
 use strict;
 use warnings;
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 use List::Util qw( pairmap pairs );
 
@@ -35,6 +35,14 @@ sub new
    return $class;
 }
 
+my %PREFIX_FROM_STRENGTH = (
+   strong   => "+",
+   weak     => "-",
+   indirect => ";",
+   inferred => ".",
+);
+my %STRENGTH_FROM_PREFIX = reverse %PREFIX_FROM_STRENGTH;
+
 sub patch_inrefs
 {
    my $self = shift;
@@ -45,10 +53,10 @@ sub patch_inrefs
    my $heap_total = scalar $df->heap;
    my $count = 0;
    foreach my $sv ( $df->heap ) {
-      # Undocumented internal method Devel::MAT::SV
-      foreach ( pairs $sv->_outrefs_matching( undef, 1 ) ) {
-         my ( $name, $ref ) = @$_;
-         push @{ $ref->{tool_inrefs} }, $name, $sv->addr if !$ref->immortal;
+      foreach my $ref ( $sv->_outrefs_matching ) {
+         my $refsv = $ref->sv;
+         my $prefixname = $PREFIX_FROM_STRENGTH{$ref->strength} . $ref->name;
+         push @{ $refsv->{tool_inrefs} }, $prefixname, $sv->addr if !$refsv->immortal;
       }
 
       $count++;
@@ -71,24 +79,23 @@ sub patch_inrefs
 
 This tool adds the following SV methods.
 
-=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs
+=head2 @refs = $sv->inrefs
 
-Returns a name/value list giving names and other SV objects for each of the
-SVs that refer to this one. This is formed by the inverse mapping along the SV
-graph from C<outrefs>.
+Returns a list of Reference objects for each of the SVs that refer to this
+one. This is formed by the inverse mapping along the SV graph from C<outrefs>.
 
-=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs_strong
+=head2 @refs = $sv->inrefs_strong
 
-=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs_weak
+=head2 @refs = $sv->inrefs_weak
 
-=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs_direct
+=head2 @refs = $sv->inrefs_direct
 
-=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs_indirect
+=head2 @refs = $sv->inrefs_indirect
 
-=head2 ( $name, $sv, $name, $sv, ... ) = $sv->inrefs_inferred
+=head2 @refs = $sv->inrefs_inferred
 
-Returns a name/value list giving names and other SV objects filtered by type,
-analogous to the various C<outrefs_*> methods.
+Returns lists of Reference objects filtered by type, analogous to the various
+C<outrefs_*> methods.
 
 =cut
 
@@ -107,29 +114,31 @@ sub Devel::MAT::SV::_inrefs
       if( wantarray and $addr and $addr =~ m/^\d+$/ ) {
          my $sv = $df->sv_at( $addr );
          if( $sv ) {
-            push @inrefs, $name, $sv;
+            push @inrefs, $name, $sv if $name =~ $match;
          }
          else {
             warn "Unable to find SV at $_ for $sv inref\n";
          }
       }
       else {
-         push @inrefs, $name => undef;
+         push @inrefs, $name => undef if $name =~ $match;
       }
    }
 
-   @inrefs = pairmap { $a =~ m/^$match/ ? ( substr( $a, 1 ) => $b ) : () } @inrefs;
-
    return @inrefs / 2 if !wantarray;
-   return @inrefs;
+
+   return pairmap {
+      my $prefix = substr( $a, 0, 1, "" );
+      Devel::MAT::SV::Reference( $a, $STRENGTH_FROM_PREFIX{$prefix}, $b );
+   } @inrefs;
 }
 
-sub Devel::MAT::SV::inrefs          { shift->_inrefs( qr/./    ) }
-sub Devel::MAT::SV::inrefs_strong   { shift->_inrefs( qr/\+/   ) }
-sub Devel::MAT::SV::inrefs_weak     { shift->_inrefs( qr/-/    ) }
-sub Devel::MAT::SV::inrefs_direct   { shift->_inrefs( qr/[+-]/ ) }
-sub Devel::MAT::SV::inrefs_indirect { shift->_inrefs( qr/;/    ) }
-sub Devel::MAT::SV::inrefs_inferred { shift->_inrefs( qr/\./   ) }
+sub Devel::MAT::SV::inrefs          { shift->_inrefs( qr/^./    ) }
+sub Devel::MAT::SV::inrefs_strong   { shift->_inrefs( qr/^\+/   ) }
+sub Devel::MAT::SV::inrefs_weak     { shift->_inrefs( qr/^-/    ) }
+sub Devel::MAT::SV::inrefs_direct   { shift->_inrefs( qr/^[+-]/ ) }
+sub Devel::MAT::SV::inrefs_indirect { shift->_inrefs( qr/^;/    ) }
+sub Devel::MAT::SV::inrefs_inferred { shift->_inrefs( qr/^\./   ) }
 
 =head1 AUTHOR
 

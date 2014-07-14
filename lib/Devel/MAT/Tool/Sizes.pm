@@ -8,11 +8,11 @@ package Devel::MAT::Tool::Sizes;
 use strict;
 use warnings;
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 use constant FOR_UI => 1;
 
-use List::Util qw( sum0 pairvalues );
+use List::Util qw( sum0 );
 
 =head1 NAME
 
@@ -161,7 +161,7 @@ sub Devel::MAT::SV::owned_set
       $seen{$next->addr}++;
       push @more, grep { !$seen{$_->addr} and
                          !$_->immortal and
-                         $_->refcnt == 1 } pairvalues $next->outrefs_strong;
+                         $_->refcnt == 1 } map { $_->sv } $next->outrefs_strong;
    }
    return @owned;
 }

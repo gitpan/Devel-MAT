@@ -23,7 +23,7 @@ my $df;
 my %ICONS;        # {$name} = $pixbuf
 my %TYPES_LARGE;  # {$type} = $pixbuf
 
-foreach (qw( SCALAR REF ARRAY HASH CODE GLOB STASH LVALUE REGEXP IO FORMAT PADLIST PADNAMES PAD )) {
+foreach (qw( SCALAR REF ARRAY HASH CODE GLOB STASH LVALUE REGEXP IO FORMAT PADLIST PADNAMES PAD INVLIST )) {
    Devel::MAT::UI->register_icon( name => "type-$_", svg => "icons/type-$_.svg" );
 
    $TYPES_LARGE{$_} = Gtk2::Gdk::Pixbuf->new_from_file_at_size(

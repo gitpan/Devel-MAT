@@ -8,7 +8,7 @@ package Devel::MAT::Dumper;
 use strict;
 use warnings;
 
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 
 use File::Basename qw( basename );
 
@@ -43,6 +43,14 @@ loaded and analysed by various tools using C<Devel::MAT::Dumpfile>.
 
 The following C<import> options control the behaviour of the module. They may
 primarily be useful when used in the C<-M> perl option:
+
+=head2 -dump_at_DIE
+
+Installs a handler for the special C<__DIE__> signal to write a dump file when
+C<die()> is about to cause a fatal signal. This is more reliable at catching
+the callstack and memory state than using an C<END> block.
+
+ $ perl -MDevel::MAT::Dumper=-dump_at_DIE ...
 
 =head2 -dump_at_END
 
@@ -117,7 +125,18 @@ sub import
    while( @_ ) {
       my $sym = shift;
 
-      if( $sym eq "-dump_at_END" ) {
+      if( $sym eq "-dump_at_DIE" ) {
+         my $old_DIE = $SIG{__DIE__};
+         $SIG{__DIE__} = sub {
+            local $SIG{__DIE__} = $old_DIE if defined $old_DIE;
+            die @_ if $^S;
+
+            print STDERR "Dumping to $dumpfile_name because of DIE\n";
+            Devel::MAT::Dumper::dump( $dumpfile_name );
+            die @_;
+         };
+      }
+      elsif( $sym eq "-dump_at_END" ) {
          $dump_at_END++;
       }
       elsif( $sym eq "-dump_at_SIGABRT" ) {

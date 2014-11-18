@@ -10,7 +10,7 @@ use warnings;
 use feature qw( switch );
 no if $] >= 5.017011, warnings => 'experimental::smartmatch';
 
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 
 use Carp;
 use Scalar::Util qw( weaken );
@@ -40,22 +40,22 @@ are documented below.
 my $direct_or_rv = sub {
    my ( $name, $sv ) = @_;
    if( defined $sv and $sv->type eq "REF" and !$sv->{magic} ) {
-      return ( "+$name directly" => $sv,
+      return ( "+$name" => $sv,
                ";$name via RV" => $sv->rv );
    }
    else {
-      return ( "+$name directly" => $sv );
+      return ( "+$name" => $sv );
    }
 };
 
 my $indirect_or_rv = sub {
    my ( $name, $sv ) = @_;
    if( defined $sv and $sv->type eq "REF" and !$sv->{magic} ) {
-      return ( ";$name indirectly" => $sv,
+      return ( ";$name" => $sv,
                ";$name via RV" => $sv->rv );
    }
    else {
-      return ( ";$name indirectly" => $sv );
+      return ( ";$name" => $sv );
    }
 };
 
@@ -332,7 +332,7 @@ boolean true and false. They are
 
 package Devel::MAT::SV::Immortal;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 use constant immortal => 1;
 sub new {
    my $class = shift;
@@ -345,13 +345,13 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::UNDEF;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 sub desc { "UNDEF" }
 sub type { "UNDEF" }
 
 package Devel::MAT::SV::YES;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 sub desc { "YES" }
 sub type { "SCALAR" }
 
@@ -366,7 +366,7 @@ sub name {}
 
 package Devel::MAT::SV::NO;
 use base qw( Devel::MAT::SV::Immortal );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 sub desc { "NO" }
 sub type { "SCALAR" }
 
@@ -381,7 +381,7 @@ sub name {}
 
 package Devel::MAT::SV::Unknown;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 0xff );
 
 sub desc { "UNKNOWN" }
@@ -390,7 +390,7 @@ sub _outrefs {}
 
 package Devel::MAT::SV::GLOB;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 1 );
 
 =head1 Devel::MAT::SV::GLOB
@@ -521,7 +521,7 @@ sub _outrefs
 
 package Devel::MAT::SV::SCALAR;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 2 );
 
 =head1 Devel::MAT::SV::SCALAR
@@ -651,7 +651,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REF;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 3 );
 
 =head1 Devel::MAT::SV::REF
@@ -722,7 +722,7 @@ sub _outrefs
 
 package Devel::MAT::SV::ARRAY;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 4 );
 
 =head1 Devel::MAT::SV::ARRAY
@@ -822,7 +822,7 @@ sub _outrefs
 
    if( $self->is_unreal ) {
       return map {
-         +"-element [$_] directly" => $df->sv_at( $self->elem_at( $_ ) ),
+         +"-element [$_]" => $df->sv_at( $self->elem_at( $_ ) ),
       } 0 .. $n-1;
    }
 
@@ -834,7 +834,7 @@ sub _outrefs
 package Devel::MAT::SV::PADLIST;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 use constant type => "PADLIST";
 
 =head1 Devel::MAT::SV::PADLIST
@@ -860,9 +860,9 @@ sub _outrefs
    my $n = $self->n_elems;
 
    return (
-      "+the padnames directly" => $df->sv_at( $self->elem_at( 0 ) ),
+      "+the padnames" => $df->sv_at( $self->elem_at( 0 ) ),
 
-      map { +"+pad at depth $_ directly" => $df->sv_at( $self->elem_at( $_ ) ) }
+      map { +"+pad at depth $_" => $df->sv_at( $self->elem_at( $_ ) ) }
          1 .. $n-1
    );
 }
@@ -870,7 +870,7 @@ sub _outrefs
 package Devel::MAT::SV::PADNAMES;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 use constant type => "PADNAMES";
 
 =head1 Devel::MAT::SV::PADNAMES
@@ -921,7 +921,7 @@ sub _outrefs
 package Devel::MAT::SV::PAD;
 # Synthetic type
 use base qw( Devel::MAT::SV::ARRAY );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 use constant type => "PAD";
 
 use List::Util qw( pairmap );
@@ -979,7 +979,7 @@ sub _outrefs
 
 package Devel::MAT::SV::HASH;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 5 );
 
 =head1 Devel::MAT::SV::HASH
@@ -1091,7 +1091,7 @@ sub _outrefs
       # in the backrefs slot directly
       ( $self->backrefs && $self->backrefs->type eq "ARRAY" ) ?
          ( "+the backrefs list" => $self->backrefs,
-           map { +";a backref indirectly" => $_ } $self->backrefs->elems ) :
+           map { +";a backref" => $_ } $self->backrefs->elems ) :
          ( "-a backref" => $self->backrefs ),
 
       map {
@@ -1102,7 +1102,7 @@ sub _outrefs
 
 package Devel::MAT::SV::STASH;
 use base qw( Devel::MAT::SV::HASH );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 6 );
 
 =head1 Devel::MAT::SV::STASH
@@ -1182,7 +1182,7 @@ sub _outrefs
 
 package Devel::MAT::SV::CODE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 7 );
 
 use List::MoreUtils qw( uniq );
@@ -1472,10 +1472,10 @@ sub _outrefs
    my $padlist = $self->padlist;
 
    # If we have a PADLIST then its contents are indirect; if not then they are direct strong
-   my $padnames_desc = $padlist ? ";the padnames indirectly"
-                                : "+the padnames directly";
-   my $pad_descf     = $padlist ? ";pad at depth %d indirectly"
-                                : "+pad at depth %d directly";
+   my $padnames_desc = $padlist ? ";the padnames"
+                                : "+the padnames";
+   my $pad_descf     = $padlist ? ";pad at depth %d"
+                                : "+pad at depth %d";
 
    return (
       ( $self->is_weakoutside ? "-the scope" : "+the scope" ) =>
@@ -1504,7 +1504,7 @@ sub _outrefs
 
 package Devel::MAT::SV::IO;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 8 );
 
 sub load
@@ -1534,7 +1534,7 @@ sub _outrefs
 
 package Devel::MAT::SV::LVALUE;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 9 );
 
 sub load
@@ -1567,7 +1567,7 @@ sub _outrefs
 
 package Devel::MAT::SV::REGEXP;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 10 );
 
 sub load {}
@@ -1578,7 +1578,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::FORMAT;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 11 );
 
 sub load {}
@@ -1589,7 +1589,7 @@ sub _outrefs { () }
 
 package Devel::MAT::SV::INVLIST;
 use base qw( Devel::MAT::SV );
-our $VERSION = '0.18';
+our $VERSION = '0.19';
 __PACKAGE__->register_type( 12 );
 
 sub load {}

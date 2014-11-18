@@ -1,5 +1,11 @@
 Revision history for Devel-MAT
 
+0.19    2014/11/18 13:17:28
+        [CHANGES]
+         * No need to annotate 'directly' or 'indirectly' on outref names
+         * Added -dump_at_DIE option to Devel::MAT::Dumper
+         * Added icon for INVLIST from perl 5.20
+
 0.18    2014/07/14 22:45:08
         [CHANGES]
          * Improved for Tools to create custom UIs

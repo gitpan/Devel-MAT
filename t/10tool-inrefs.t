@@ -58,7 +58,7 @@ BEGIN { our @AofA = ( [] ); }
    } @pvs;
 
    my ( $lexical ) = grep {
-      grep { $_->name eq 'the lexical $DUMPFILE directly' } $_->inrefs
+      grep { $_->name eq 'the lexical $DUMPFILE' } $_->inrefs
    } @pvs;
 
    ok( scalar @constants, 'Found some constants' );
@@ -71,14 +71,14 @@ BEGIN { our $PACKAGE_SCALAR = "some value" }
 
    is_deeply( [ map { s/$ADDR/ADDR/g; s/\d+/NNN/g; $_ } $pmat->identify( $sv ) ],
               [ "the scalar of GLOB(\$*) at ADDR, which is:",
-                "  a backref indirectly of STASH(NNN) at ADDR, which is:",
+                "  a backref of STASH(NNN) at ADDR, which is:",
                 "    the default stash",
-                "  element [NNN] directly of ARRAY(NNN,!REAL) at ADDR, which is:",
+                "  element [NNN] of ARRAY(NNN,!REAL) at ADDR, which is:",
                 "    the backrefs list of STASH(NNN) at ADDR, which is:",
                 "      already found",
                 "  the egv of GLOB(\$*) at ADDR, which is:",
                 "    itself",
-                "  value {PACKAGE_SCALAR} directly of STASH(NNN) at ADDR, which is:",
+                "  value {PACKAGE_SCALAR} of STASH(NNN) at ADDR, which is:",
                 "    already found" ],
               '$pmat can identify PACKAGE_SCALAR SV' );
 }

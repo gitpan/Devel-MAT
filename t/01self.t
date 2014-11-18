@@ -102,9 +102,9 @@ BEGIN { our @AofA = ( [] ); }
 
    my @outrefs_direct = $av->outrefs_direct;
    is( scalar @outrefs_direct, 1, '$av->outrefs_direct is 1' );
-   is( $outrefs_direct[0]->sv,       $rv,                    'AV outref[0] SV is $rv' );
-   is( $outrefs_direct[0]->strength, "strong",               'AV outref[0] strength is strong' );
-   is( $outrefs_direct[0]->name,     "element [0] directly", 'AV outref[0] name' );
+   is( $outrefs_direct[0]->sv,       $rv,           'AV outref[0] SV is $rv' );
+   is( $outrefs_direct[0]->strength, "strong",      'AV outref[0] strength is strong' );
+   is( $outrefs_direct[0]->name,     "element [0]", 'AV outref[0] name' );
 
    my @outrefs_indirect = $av->outrefs_indirect;
    is( scalar @outrefs_indirect, 1, '$av->outrefs_indirect is 1' );

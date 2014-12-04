@@ -8,7 +8,7 @@ package Devel::MAT::Dumper;
 use strict;
 use warnings;
 
-our $VERSION = '0.19';
+our $VERSION = '0.20';
 
 use File::Basename qw( basename );
 
@@ -82,6 +82,10 @@ F<$0.pmat> if not supplied.
 
  $ perl -MDevel::MAT::Dumper=-file,foo.pmat ...
 
+If the pattern contains C<NNN>, this will be replaced by a unique serial
+number per written file, starting from 0. This may be helpful in the case of
+C<DIE> or C<SIGQUIT> handlers, which could be invoked multiple times.
+
 =head2 -max_string
 
 Sets the maximum length of string buffer to dump from PVs; defaults to 256 if
@@ -101,18 +105,19 @@ our $MAX_STRING = 256; # used by XS code
 
 my $dumpfile_name = basename( $0 ) . ".pmat";
 my $dumpfh;
+my $next_serial = 0;
 
 my $dump_at_END;
 END {
    return unless $dump_at_END;
 
-   print STDERR "Dumping to $dumpfile_name because of END\n";
-
    if( $dumpfh ) {
       Devel::MAT::Dumper::dumpfh( $dumpfh );
    }
    else {
-      Devel::MAT::Dumper::dump( $dumpfile_name );
+      ( my $file = $dumpfile_name ) =~ s/NNN/$next_serial++/e;
+      print STDERR "Dumping to $file because of END\n";
+      Devel::MAT::Dumper::dump( $file );
    }
 }
 
@@ -131,8 +136,9 @@ sub import
             local $SIG{__DIE__} = $old_DIE if defined $old_DIE;
             die @_ if $^S;
 
-            print STDERR "Dumping to $dumpfile_name because of DIE\n";
-            Devel::MAT::Dumper::dump( $dumpfile_name );
+            ( my $file = $dumpfile_name ) =~ s/NNN/$next_serial++/e;
+            print STDERR "Dumping to $file because of DIE\n";
+            Devel::MAT::Dumper::dump( $file );
             die @_;
          };
       }
@@ -141,16 +147,18 @@ sub import
       }
       elsif( $sym eq "-dump_at_SIGABRT" ) {
          $SIG{ABRT} = sub {
-            print STDERR "Dumping to $dumpfile_name because of SIGABRT\n";
-            Devel::MAT::Dumper::dump( $dumpfile_name );
+            ( my $file = $dumpfile_name ) =~ s/NNN/$next_serial++/e;
+            print STDERR "Dumping to $file because of SIGABRT\n";
+            Devel::MAT::Dumper::dump( $file );
             undef $SIG{ABRT};
             kill ABRT => $$;
          };
       }
       elsif( $sym eq "-dump_at_SIGQUIT" ) {
          $SIG{QUIT} = sub {
-            print STDERR "Dumping to $dumpfile_name because of SIGQUIT\n";
-            Devel::MAT::Dumper::dump( $dumpfile_name );
+            ( my $file = $dumpfile_name ) =~ s/NNN/$next_serial++/e;
+            print STDERR "Dumping to $file because of SIGQUIT\n";
+            Devel::MAT::Dumper::dump( $file );
          };
       }
       elsif( $sym eq "-file" ) {

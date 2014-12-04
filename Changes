@@ -1,5 +1,17 @@
 Revision history for Devel-MAT
 
+0.20    2014/12/04 18:35:09
+        [CHANGES]
+         * Allow serial-numbering of .pmat files in the Dumper
+         * Totally refactored $pmat->identify to return an abstract Graph
+           structure
+         * Much improved pmat-identify-sv output; sort strong-refs first,
+           use Unicode linedrawing, identify "already seen" SVs clearer
+         * GTK Explorer improvements:
+            + Allow search by symbol
+            + Show longer PV strings in tooltip
+            + Selectable SV detail labels
+
 0.19    2014/11/18 13:17:28
         [CHANGES]
          * No need to annotate 'directly' or 'indirectly' on outref names

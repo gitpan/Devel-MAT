@@ -18,6 +18,7 @@ lib/Devel/MAT/Context.pm
 lib/Devel/MAT/Dumper.pm
 lib/Devel/MAT/Dumper.xs
 lib/Devel/MAT/Dumpfile.pm
+lib/Devel/MAT/Graph.pm
 lib/Devel/MAT/SV.pm
 lib/Devel/MAT/Tool.pod
 lib/Devel/MAT/Tool/Count.pm

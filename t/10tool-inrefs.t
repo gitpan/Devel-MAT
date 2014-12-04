@@ -69,18 +69,20 @@ BEGIN { our $PACKAGE_SCALAR = "some value" }
 {
    my $sv = $pmat->find_symbol( '$PACKAGE_SCALAR' );
 
-   is_deeply( [ map { s/$ADDR/ADDR/g; s/\d+/NNN/g; $_ } $pmat->identify( $sv ) ],
-              [ "the scalar of GLOB(\$*) at ADDR, which is:",
-                "  a backref of STASH(NNN) at ADDR, which is:",
-                "    the default stash",
-                "  element [NNN] of ARRAY(NNN,!REAL) at ADDR, which is:",
-                "    the backrefs list of STASH(NNN) at ADDR, which is:",
-                "      already found",
-                "  the egv of GLOB(\$*) at ADDR, which is:",
-                "    itself",
-                "  value {PACKAGE_SCALAR} of STASH(NNN) at ADDR, which is:",
-                "    already found" ],
-              '$pmat can identify PACKAGE_SCALAR SV' );
+   my $svnode = $pmat->inref_graph( $sv );
+
+   ok( defined $svnode, '->inref_graph $sv defined' );
+
+   my ( undef, $gvnode ) = pairgrep { $a->name eq "the scalar" } $svnode->edges_in;
+   ok( $gvnode, '$svnode has "the scalar" edge in' );
+   is( $gvnode->sv->type, "GLOB", 'gvnode is a GLOB' );
+
+   my ( undef, $stashnode ) = pairgrep { $a->name eq "value {PACKAGE_SCALAR}" } $gvnode->edges_in;
+   ok( $stashnode, '$gvnode has value {PACKAGE_SCALAR}' );
+   is( $stashnode->sv->type, "STASH", 'svnode stash is a STASH' );
+
+   ok( scalar( grep { $_ eq "the default stash" } $stashnode->roots ),
+      'stashnode has default stash as a root' );
 }
 
 done_testing;

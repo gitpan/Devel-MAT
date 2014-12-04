@@ -159,35 +159,28 @@ my $inrefs_mth = "inrefs";
 add_menuitem( $navmenu, "Back" => \&history_back );
 add_menuitem( $navmenu, "Forward" => \&history_forward );
 
-add_menuitem( $navmenu, "To SV..." => sub {
-   my $d = Gtk2::Dialog->new(
-      'Enter SV address',
-      $win,
-      [ qw( modal destroy-with-parent )],
-      'gtk-cancel' => 'reject',
-      'gtk-ok'     => 'accept',
-   );
+add_menuitem( $navmenu, "By address..." => sub {
+   defined( my $addr = entry_dialog( "Enter SV address" ) ) or return;
 
-   my $entry = Gtk2::Entry->new();
-   $d->signal_connect(
-      response => sub {
-         my $win = shift;
-         my $ev = shift;
-         if( $ev eq 'accept' ) {
-            my $sv = $df->sv_at( hex $entry->get_text );
-            history_nav( $sv ) if $sv;
-            $win->destroy;
-         }
-         elsif( $ev eq 'reject' ) {
-            $win->destroy;
-         }
-      }
-   );
+   $addr = hex $addr;
+   if( my $sv = $df->sv_at( $addr ) ) {
+      history_nav( $sv );
+   }
+   else {
+      progress( sprintf "Cannot navigate by address: no such SV at 0x%x", $addr );
+   }
+});
 
-   my $vbox = $d->vbox;
-   $vbox->pack_start($entry, 0, 0, 4);
-   $vbox->show_all;
-   $d->show;
+add_menuitem( $navmenu, "By symbol..." => sub {
+   defined( my $symb = entry_dialog( "Enter symbol name" ) ) or return;
+
+   if( my $sv = eval { $pmat->find_symbol( $symb ) } ) {
+      history_nav( $sv );
+   }
+   else {
+      chomp( my $e = $@ );
+      progress( "Cannot navigate by symbol: $e" );
+   }
 });
 
 my $rootmenu = add_submenu( $menu, "Roots" );
@@ -428,71 +421,72 @@ sub display_sv
 
    # Common things for all widget types;
    my $type = $sv->type;
-   table_add( "Type" => label( $type ), undef, 2 );
+   table_add( "Type" => textarea( $type ), undef, 2 );
 
-   table_add( "Address" => label( sprintf "%#x", $sv->addr ), undef, 2 );
+   table_add( "Address" => textarea( sprintf "%#x", $sv->addr ), undef, 2 );
 
-   table_add( "SvREFCNT" => label( $sv->refcnt ), undef, 2 );
+   table_add( "SvREFCNT" => textarea( $sv->refcnt ), undef, 2 );
 
    my $sizestr = $sv->size;
    if( $sv->size > 1024 ) {
       $sizestr = bytes2size( $sv->size ) . " ($sizestr)";
    }
-   table_add( "Size" => label( $sizestr ), undef, 2 );
+   table_add( "Size" => textarea( $sizestr ), undef, 2 );
 
-   table_add( "Description" => label( $sv->desc ) );
+   table_add( "Description" => textarea( $sv->desc ) );
 
    $table->attach(
       Gtk2::Image->new_from_pixbuf( $TYPES_LARGE{$type} ), 2, 3, 1, 5, [], [], 5, 5,
    );
 
    if( my $stash = $sv->blessed ) {
-      table_add( "Blessed", label( $stash->stashname ) );
+      table_add( "Blessed", textarea( $stash->stashname ) );
    }
 
    given( $type ) {
       when([ "GLOB", "CODE", "STASH" ]) {
-         table_add( "Stashname", label( $sv->stashname ) ) if defined $sv->stashname;
+         table_add( "Stashname", textarea( $sv->stashname ) ) if defined $sv->stashname;
       }
    }
 
    given( $type ) {
       when( "CODE" ) {
-         table_add( "Flags", label( join( " ",
+         table_add( "Flags", textarea( join( " ",
                   ( $sv->is_clone       ? "CLONE"       : () ),
                   ( $sv->is_cloned      ? "CLONED"      : () ),
                   ( $sv->is_xsub        ? "XSUB"        : () ),
                   ( $sv->is_weakoutside ? "WEAKOUTSIDE" : () ),
                   ( $sv->is_cvgv_rc     ? "CVGV_RC"     : () ) ) ) );
-         table_add( "Oproot", label( sprintf "%x (%d)", $sv->oproot, $sv->oproot ) ) if $sv->oproot;
+         table_add( "Oproot", textarea( sprintf "%x (%d)", $sv->oproot, $sv->oproot ) ) if $sv->oproot;
       }
       when( "SCALAR" ) {
-         table_add( "UV", label( $sv->uv ) ) if defined $sv->uv;
-         table_add( "IV", label( $sv->iv ) ) if defined $sv->iv;
-         table_add( "NV", label( $sv->nv ) ) if defined $sv->nv;
+         table_add( "UV", textarea( $sv->uv ) ) if defined $sv->uv;
+         table_add( "IV", textarea( $sv->iv ) ) if defined $sv->iv;
+         table_add( "NV", textarea( $sv->nv ) ) if defined $sv->nv;
          if( defined $sv->pv ) {
-            table_add( "PV len", label( $sv->pvlen ) );
-            table_add( "PV",     label( $sv->qq_pv( 32 ) ) );
+            table_add( "PV len", textarea( $sv->pvlen ) );
+            table_add( "PV",     my $pvtext = textarea( $sv->qq_pv( 32 ) ) );
+            $pvtext->set_tooltip_text( $sv->qq_pv( 1024 ) );
          }
       }
       when( "REF" ) {
-         table_add( "RV", label( $sv->rv->desc . ( $sv->is_weak ? " weakly" : " strongly" ) ) )
+         table_add( "RV", textarea( $sv->rv->desc . ( $sv->is_weak ? " weakly" : " strongly" ) ) )
             if defined $sv->rv;
       }
    }
 
    given( $type ) {
       when([ "SCALAR", "REF", "ARRAY", "HASH", "STASH", "CODE" ]) {
-         table_add( "Name", label( $sv->name ) ) if defined $sv->name;
+         table_add( "Name", textarea( $sv->name ) ) if defined $sv->name;
       }
    }
 
    given( $type ) {
       when([ "GLOB", "CODE" ]) {
-         table_add( "Location", label( $sv->location ) );
+         table_add( "Location", textarea( $sv->location ) );
       }
       when([ "PAD", "PADNAMES", "PADLIST" ]) {
-         table_add( "CV location", label( $sv->padcv->location ) );
+         table_add( "CV location", textarea( $sv->padcv->location ) );
       }
    }
 
@@ -503,7 +497,7 @@ sub display_sv
       my $widget;
       given( $extra->{type} ) {
          when( "widget" ) { $widget = $data }
-         when( "text" )   { $widget = label( $data ) }
+         when( "text" )   { $widget = textarea( $data ) }
          when( "icon" )   { $widget = Gtk2::Image->new_from_pixbuf( $ICONS{$data} ) }
          default          { die "Unable to handle SV detail type $extra->{type}" }
       }
@@ -598,6 +592,15 @@ sub label
    return $l;
 }
 
+sub textarea
+{
+   my ( $text ) = @_;
+   my $l = label( $text );
+   $l->set_selectable( TRUE );
+   $l->set_can_focus( FALSE );
+   return $l;
+}
+
 sub add_submenu
 {
    my ( $menu, $name ) = @_;
@@ -619,6 +622,33 @@ sub add_menuitem
    $mi->signal_connect( activate => $code );
 
    $menu->append( $mi );
+}
+
+sub entry_dialog
+{
+   my ( $question ) = @_;
+
+   my $d = Gtk2::Dialog->new( $question, $win,
+      [ qw( modal destroy-with-parent )],
+      'gtk-cancel' => 'reject',
+      'gtk-ok'     => 'accept',
+   );
+   $d->set_default_response( 'accept' );
+
+   my $entry = Gtk2::Entry->new();
+   $entry->set_activates_default( TRUE );
+
+   my $vbox = $d->vbox;
+   $vbox->pack_start( $entry, 0, 0, 4 );
+   $vbox->show_all;
+
+   my $response = $d->run;
+   my $text = $entry->get_text;
+
+   $d->destroy;
+
+   return $text if $response eq 'accept';
+   return;
 }
 
 ## Tool plugin hooks
@@ -770,18 +800,18 @@ sub Devel::MAT::UI::make_table
 sub Devel::MAT::UI::make_widget_text
 {
    shift;
-   my ( $label ) = @_;
-   return label( $label );
+   my ( $text ) = @_;
+   return textarea( $text );
 }
 
 sub Devel::MAT::UI::make_widget_text_icon
 {
-   shift;
+   my $self = shift;
    my ( $label, $icon ) = @_;
 
    my $hbox = Gtk2::HBox->new;
 
-   $hbox->add( label( $label ) );
+   $hbox->add( $self->make_widget_text( $label ) );
    $hbox->add( Gtk2::Image->new_from_pixbuf( $ICONS{$icon} ) );
 
    return $hbox;

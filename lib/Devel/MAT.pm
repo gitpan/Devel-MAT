@@ -8,13 +8,14 @@ package Devel::MAT;
 use strict;
 use warnings;
 
-our $VERSION = '0.19';
+our $VERSION = '0.20';
 
 use Carp;
 use List::Util qw( pairs );
 use List::UtilsBy qw( sort_by );
 
 use Devel::MAT::Dumpfile;
+use Devel::MAT::Graph;
 
 use Module::Pluggable
    sub_name => "_available_tools",
@@ -134,13 +135,11 @@ sub load_tool
    return $self->{tools}{$name} ||= $tool_class->new( $self, %args );
 }
 
-=head2 @text = $pmat->identify( $sv, %opts )
+=head2 $node = $pmat->inref_graph( $sv, %opts )
 
 Traces the tree of inrefs from C<$sv> back towards the known roots, returning
-a textual description as a list of lines of text.
-
-The lines of text, when printed, will form a reverse reference tree, showing
-the paths from the given SV back to the roots.
+a L<Devel::MAT::Graph> node object representing it, within a graph of reverse
+references back to the known roots.
 
 This method will load L<Devel::MAT::Tool::Inrefs> if it isn't yet loaded.
 
@@ -151,7 +150,9 @@ The following named options are recognised:
 =item depth => INT
 
 If specified, stop recursing after the specified count. A depth of 1 will only
-print immediately referring SVs, 2 will print the referrers of those, etc.
+include immediately referring SVs, 2 will print the referrers of those, etc.
+Nodes with inrefs that were trimmed because of this limit will appear to be
+roots with a special name of C<EDEPTH>.
 
 =item strong => BOOL
 
@@ -165,28 +166,32 @@ will follow only direct inrefs.
 
 =cut
 
-sub identify
+sub inref_graph
 {
    my $self = shift;
    my ( $sv, %opts ) = @_;
 
-   my $seen = $opts{seen} //= {};
+   my $graph = $opts{graph} //= Devel::MAT::Graph->new( $self->dumpfile );
 
    $self->load_tool( "Inrefs" );
 
    if( $sv->immortal ) {
-      return ( "undef" ) if $sv->type eq "UNDEF";
-      return $sv->uv ? "true" : "false";
+      my $desc = $sv->type eq "UNDEF" ? "undef" :
+                 $sv->uv              ? "true" :
+                                        "false";
+      $graph->add_root( $sv, $desc );
+      return $graph->get_sv_node( $sv );
    }
 
    my $svaddr = $sv->addr;
 
    foreach ( pairs $self->dumpfile->roots ) {
       my ( $name, $root ) = @$_;
-      return $name if $root and $svaddr == $root->addr;
+      $root and $svaddr == $root->addr and
+         $graph->add_root( $sv, $name ), return $graph->get_sv_node( $sv );
    }
 
-   $seen->{$svaddr} = 1;
+   $graph->add_sv( $sv );
 
    my @ret = ();
    my @inrefs = $opts{strong} ? $sv->inrefs_strong :
@@ -194,33 +199,32 @@ sub identify
                                 $sv->inrefs;
    foreach my $ref ( sort_by { $_->name } @inrefs ) {
       if( !defined $ref->sv ) {
-         push @ret, $ref->name; # e.g. "a value on the stack"
+         # e.g. "a value on the stack"
+         $graph->add_root( $sv, $ref->name );
+         push @ret, $ref->name;
          next;
       }
 
+      if( defined $opts{depth} and not $opts{depth} ) {
+         $graph->add_root( $sv, "EDEPTH" );
+         last;
+      }
+
       my @me;
-      if( $ref->sv == $sv ) {
-         @me = "itself";
-      }
-      elsif( $seen->{$ref->sv->addr} ) {
-         @me = "already found";
-      }
-      elsif( !defined $opts{depth} or $opts{depth} ) {
-         $seen->{$ref->sv->addr}++;
-         @me = ( defined $opts{depth} ) ? $self->identify( $ref->sv, %opts, depth => $opts{depth}-1 )
-                                        : $self->identify( $ref->sv, %opts );
+      if( $graph->has_sv( $ref->sv ) ) {
+         $graph->add_ref( $ref->sv, $sv, $ref );
+         # Don't recurse into it as it was already found
       }
       else {
-         @me = "not found at this depth";
-      }
+         $graph->add_sv( $ref->sv ); # add first to stop inf. loops
 
-      push @ret,
-         sprintf( "%s of %s, which is:", $ref->name, $ref->sv->desc_addr ),
-         map { "  $_" } @me;
+         defined $opts{depth} ? $self->inref_graph( $ref->sv, %opts, depth => $opts{depth}-1 )
+                              : $self->inref_graph( $ref->sv, %opts );
+         $graph->add_ref( $ref->sv, $sv, $ref );
+      }
    }
 
-   return "not found" unless @ret;
-   return @ret;
+   return $graph->get_sv_node( $sv );
 }
 
 =head2 $sv = $pmat->find_symbol( $name )

@@ -33,12 +33,10 @@ METHODS
   $tool = $pmat->load_tool( $name )
     Loads the named Devel::MAT::Tool class.
 
-  @text = $pmat->identify( $sv, %opts )
+  $node = $pmat->inref_graph( $sv, %opts )
     Traces the tree of inrefs from `$sv' back towards the known roots,
-    returning a textual description as a list of lines of text.
-
-    The lines of text, when printed, will form a reverse reference tree,
-    showing the paths from the given SV back to the roots.
+    returning a Devel::MAT::Graph node object representing it, within a
+    graph of reverse references back to the known roots.
 
     This method will load Devel::MAT::Tool::Inrefs if it isn't yet loaded.
 
@@ -46,8 +44,10 @@ METHODS
 
     depth => INT
         If specified, stop recursing after the specified count. A depth of 1
-        will only print immediately referring SVs, 2 will print the
-        referrers of those, etc.
+        will only include immediately referring SVs, 2 will print the
+        referrers of those, etc. Nodes with inrefs that were trimmed because
+        of this limit will appear to be roots with a special name of
+        `EDEPTH'.
 
     strong => BOOL
     direct => BOOL
